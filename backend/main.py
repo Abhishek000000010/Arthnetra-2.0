@@ -10,9 +10,11 @@ import math
 import re
 import base64
 import hashlib
-import hmac
+import json
 import secrets
 import smtplib
+import random
+import uuid
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 from email.mime.text import MIMEText
@@ -42,7 +44,7 @@ def format_inr(amount: float) -> str:
 
 
 def clean_text(value) -> str:
-    return str(value).replace("â¹", "Rs ").replace("₹", "Rs ").strip()
+    return str(value).replace("â‚¹", "Rs ").replace("₹", "Rs ").strip()
 
 
 def normalize_money(value, fallback: str) -> str:
@@ -198,15 +200,49 @@ def build_member(name: str, email: str, picture: str | None, code: str, index: i
     return member
 
 
-def add_activity(fund: dict, title: str, detail: str, activity_type: str = "system") -> None:
-    item = {
-        "id": f"activity-{int(datetime.now(timezone.utc).timestamp() * 1000)}-{secrets.token_hex(3)}",
+def add_activity(fund, title, detail, type, amount=0, user="System"):
+    activity_id = str(uuid.uuid4())
+    timestamp = utc_now_iso()
+    
+    # Get the hash of the last activity to link it (The Block Header)
+    prev_hash = "0x0000000000000000000000000000000000000000000000000000000000000000"
+    if fund.get("activity") and len(fund["activity"]) > 0:
+        prev_hash = fund["activity"][0].get("hash", prev_hash)
+
+    # Create the data for hashing (The Block Body)
+    block_data = {
+        "id": activity_id,
         "title": title,
         "detail": detail,
-        "type": activity_type,
-        "timestamp": utc_now_iso(),
+        "type": type,
+        "amount": amount,
+        "user": user,
+        "timestamp": timestamp,
+        "prevHash": prev_hash
     }
-    fund["activity"] = [item, *fund.get("activity", [])][:30]
+    
+    # Generate SHA-256 Hash
+    block_string = json.dumps(block_data, sort_keys=True).encode()
+    current_hash = "0x" + hashlib.sha256(block_string).hexdigest()
+
+    # Create the activity record
+    activity_entry = {
+        **block_data,
+        "hash": current_hash,
+        "unread": True
+    }
+
+    if "activity" not in fund:
+        fund["activity"] = []
+    
+    # Insert at beginning (LIFO for UI)
+    fund["activity"].insert(0, activity_entry)
+    
+    # Limit activity log
+    if len(fund["activity"]) > 100:
+        fund["activity"] = fund["activity"][:100]
+
+    return activity_entry
 
 
 def recompute_fund(fund: dict) -> dict:
@@ -247,7 +283,11 @@ def recompute_fund(fund: dict) -> dict:
     return fund
 
 
-def serialize_member(member: dict, current_email: str | None) -> dict:
+async def serialize_member(member: dict, current_email: str | None) -> dict:
+    member_email = member["email"].strip().lower()
+    user_for_member = await db.users.find_one({"email": member_email})
+    member_wallet = user_for_member.get("wallet_balance", 10000.0) if user_for_member else 10000.0
+
     return {
         "id": member["id"],
         "name": member["name"],
@@ -255,19 +295,29 @@ def serialize_member(member: dict, current_email: str | None) -> dict:
         "picture": member.get("picture"),
         "score": member["score"],
         "status": member["status"],
-        "repaymentHistory": member["repayment_history"],
-        "totalContributed": member["total_contributed"],
-        "dueDate": member["due_date"],
+        "repaymentHistory": member.get("repayment_history", []),
+        "totalContributed": member.get("total_contributed", 0),
+        "dueDate": member.get("due_date", ""),
         "lastPaidOn": member.get("last_paid_on"),
-        "walletBalance": member.get("wallet_balance", 0),
-        "isCurrentUser": current_email == member["email"],
+        "walletBalance": member_wallet,
+        "isCurrentUser": member["email"] == current_email,
     }
 
 
-def serialize_fund(fund: dict, current_email: str | None) -> dict:
-    members = [serialize_member(member, current_email) for member in fund.get("members", [])]
+async def serialize_fund(fund: dict, current_email: str | None) -> dict:
+    members = []
+    for m in fund.get("members", []):
+        members.append(await serialize_member(m, current_email))
+        
     me = next((member for member in members if member["email"] == current_email), None)
     auction = fund["auction"]
+    
+    # Fetch global wallet balance for the current user if they are logged in
+    global_wallet = 0
+    if current_email:
+        user_doc = await db.users.find_one({"email": current_email.strip().lower()})
+        if user_doc:
+            global_wallet = user_doc.get("wallet_balance", 10000.0)
 
     return {
         "fundId": fund["_id"],
@@ -298,7 +348,7 @@ def serialize_fund(fund: dict, current_email: str | None) -> dict:
         },
         "contributionHistory": fund.get("contribution_history", []),
         "activity": fund.get("activity", []),
-        "myWalletBalance": me["walletBalance"] if me else 0,
+        "myWalletBalance": global_wallet,
         "myMemberId": me["id"] if me else None,
         "isCreator": fund["creator_email"] == current_email,
         "creatorName": fund["creator_name"],
@@ -515,6 +565,14 @@ async def root():
     return {"status": "ArthaNetra Collective Finance System Operational"}
 
 
+@app.get("/api/user/balance")
+async def get_user_balance(email: str):
+    user = await db.users.find_one({"email": email.strip().lower()})
+    if not user:
+        return {"walletBalance": 10000.0} # Default for demo
+    return {"walletBalance": user.get("wallet_balance", 10000.0)}
+
+
 @app.post("/api/synthesize")
 async def synthesize_blueprint(data: FundIntent):
     fallback = build_fallback_blueprint(data.intent, data.groupSize, data.durationMonths)
@@ -584,6 +642,7 @@ async def register_user(payload: AuthRegister):
         "email": email,
         "password_hash": hash_password(password),
         "picture": None,
+        "wallet_balance": 10000.0,
         "created_at": now,
         "last_login_at": now,
     }
@@ -633,33 +692,18 @@ async def login_user(payload: AuthLogin):
 
 @app.post("/api/auth/google-user")
 async def upsert_google_user(profile: GoogleUserProfile):
-    await db.users.update_one(
-        {"email": profile.email.lower()},
-        {
-            "$set": {
-                "auth_provider": "google",
-                "google_id": profile.id,
-                "name": profile.name,
-                "email": profile.email.lower(),
-                "picture": profile.picture,
-                "last_login_at": utc_now_iso(),
-            },
-            "$setOnInsert": {
-                "created_at": utc_now_iso(),
-            }
-        },
-        upsert=True,
-    )
-    return {
-        "status": "Google user stored",
-        "user": {
-            "id": profile.id,
+    user = await db.users.find_one({"email": profile.email.lower()})
+    if not user:
+        user = {
             "name": profile.name,
             "email": profile.email.lower(),
             "picture": profile.picture,
-            "provider": "google",
-        },
-    }
+            "wallet_balance": 10000.0,
+            "created_at": utc_now_iso(),
+        }
+        await db.users.insert_one(user)
+    
+    return user
 
 
 @app.get("/api/funds/by-user")
@@ -726,7 +770,7 @@ async def create_live_fund(payload: CreateLiveFundRequest):
     await db.funds.insert_one(fund_doc)
     return {
         "message": "Fund created successfully.",
-        "fund": serialize_fund(fund_doc, payload.creatorEmail.strip().lower()),
+        "fund": await serialize_fund(fund_doc, payload.creatorEmail.strip().lower()),
     }
 
 
@@ -744,7 +788,7 @@ async def join_live_fund(payload: JoinLiveFundRequest):
     if existing_member:
         return {
             "message": "You are already part of this chit fund.",
-            "fund": serialize_fund(recompute_fund(fund), email),
+            "fund": await serialize_fund(recompute_fund(fund), email),
         }
 
     new_member = build_member(payload.name.strip(), email, payload.picture, fund["code"], len(fund["members"]) + 1)
@@ -761,7 +805,7 @@ async def join_live_fund(payload: JoinLiveFundRequest):
 
     return {
         "message": "Joined chit fund successfully.",
-        "fund": serialize_fund(fund, email),
+        "fund": await serialize_fund(fund, email),
     }
 
 
@@ -771,7 +815,7 @@ async def get_live_fund(fund_id: str, email: str | None = None):
     if not fund:
         raise HTTPException(status_code=404, detail="Fund not found.")
     recompute_fund(fund)
-    return {"fund": serialize_fund(fund, email.strip().lower() if email else None)}
+    return {"fund": await serialize_fund(fund, email.strip().lower() if email else None)}
 
 
 @app.post("/api/funds/{fund_id}/invite")
@@ -808,7 +852,7 @@ async def invite_member_to_fund(fund_id: str, payload: InviteMemberRequest):
 
     return {
         "message": f"Invite sent to {payload.recipientEmail.strip().lower()} through Gmail SMTP.",
-        "fund": serialize_fund(fund, inviter_email),
+        "fund": await serialize_fund(fund, inviter_email),
     }
 
 
@@ -852,44 +896,66 @@ async def request_join_code_email(fund_id: str, payload: RequestJoinCodeEmailReq
     }
 
 
-@app.post("/api/funds/{fund_id}/contributions/pay")
-async def pay_live_contribution(fund_id: str, payload: ContributionActionRequest):
+@app.post("/api/funds/{fund_id}/pay/{member_id}")
+async def pay_contribution(fund_id: str, member_id: str):
     fund = await db.funds.find_one({"_id": fund_id})
     if not fund:
-        raise HTTPException(status_code=404, detail="Fund not found.")
+        raise HTTPException(status_code=404, detail="Fund not found")
 
-    member = find_member_by_id(fund, payload.memberId)
+    member = next((m for m in fund["members"] if m["id"] == member_id), None)
     if not member:
-        raise HTTPException(status_code=404, detail="Member not found.")
-    if member["status"] == "paid":
-        return {"message": f"{member['name']} is already paid.", "fund": serialize_fund(fund, member["email"])}
-    if member["wallet_balance"] < fund["monthly_installment"]:
-        raise HTTPException(status_code=400, detail="This member does not have enough demo balance.")
+        raise HTTPException(status_code=404, detail="Member not found")
 
-    member["wallet_balance"] -= fund["monthly_installment"]
-    member["total_contributed"] += fund["monthly_installment"]
+    if member["status"] == "paid":
+        return {"message": "Already paid", "fund": await serialize_fund(fund, member["email"])}
+
+    # Logic: Deduct from User's Global Wallet
+    member_email = member["email"].strip().lower()
+    user = await db.users.find_one({"email": member_email})
+    if not user:
+        raise HTTPException(status_code=404, detail=f"User profile with email {member_email} not found")
+    
+    # Ensure wallet_balance is initialized for the demo if missing
+    current_balance = user.get("wallet_balance")
+    if current_balance is None:
+        current_balance = 10000.0
+        await db.users.update_one({"_id": user["_id"]}, {"$set": {"wallet_balance": current_balance}})
+
+    cost = fund["monthly_installment"]
+    if current_balance < cost:
+        raise HTTPException(status_code=400, detail=f"Insufficient wallet balance ({format_inr(current_balance)}). Need {format_inr(cost)}. Top up first!")
+
+    # Perform Deduction
+    await db.users.update_one(
+        {"email": member["email"]}, 
+        {"$inc": {"wallet_balance": -cost}}
+    )
+
     member["status"] = "paid"
-    member["last_paid_on"] = utc_now_iso()
-    member["repayment_history"] = [*member.get("repayment_history", []), 100][-6:]
-    member["score"] = member_score(member)
-    fund["pool_total"] += fund["monthly_installment"]
+    fund["pool_total"] += cost
     fund["updated_at"] = utc_now_iso()
-    append_contribution_history(
-        fund,
-        member,
-        fund["monthly_installment"],
-        "paid",
-        "Contribution collected successfully.",
-    )
+    
     add_activity(
-        fund,
-        "Contribution received",
-        f"{member['name']} contributed {format_inr(fund['monthly_installment'])}.",
+        fund, 
+        "Payment Processed", 
+        f"{member['name']} paid Rs {cost}. Wallet updated.", 
         "payment",
+        amount=cost,
+        user=member['name']
     )
-    recompute_fund(fund)
-    await db.funds.replace_one({"_id": fund["_id"]}, fund)
-    return {"message": f"{member['name']} marked as paid.", "fund": serialize_fund(fund, member["email"])}
+    
+    await db.funds.replace_one({"_id": fund_id}, fund)
+    return {"message": "Payment successful", "fund": await serialize_fund(fund, member["email"])}
+
+@app.post("/api/user/wallet/topup")
+async def topup_wallet(email: str, amount: float = 5000.0):
+    normalized = email.strip().lower()
+    user = await db.users.find_one({"email": normalized})
+    if not user:
+        raise HTTPException(status_code=404, detail=f"User {normalized} not found")
+    
+    await db.users.update_one({"email": normalized}, {"$inc": {"wallet_balance": amount}})
+    return {"message": f"Added Rs {amount} to your wallet.", "new_balance": user.get("wallet_balance", 0) + amount}
 
 
 @app.post("/api/funds/{fund_id}/contributions/bulk")
@@ -899,18 +965,32 @@ async def bulk_collect_live_contributions(fund_id: str):
         raise HTTPException(status_code=404, detail="Fund not found.")
 
     processed = 0
-    for member in fund.get("members", []):
+    members_list = fund.get("members", [])
+    cost = fund["monthly_installment"]
+
+    for member in members_list:
         if member["status"] == "paid":
             continue
-        if member["wallet_balance"] < fund["monthly_installment"]:
+        
+        # Consistent logic: Use Global Wallet
+        member_email = member["email"].strip().lower()
+        user = await db.users.find_one({"email": member_email})
+        global_balance = 10000.0 if not user else user.get("wallet_balance", 10000.0)
+
+        if global_balance < cost:
             member["status"] = "overdue"
             continue
-        member["wallet_balance"] -= fund["monthly_installment"]
-        member["total_contributed"] += fund["monthly_installment"]
+        
+        # Deduct from Global Wallet
+        if user:
+            await db.users.update_one({"_id": user["_id"]}, {"$inc": {"wallet_balance": -cost}})
+        
         member["status"] = "paid"
         member["last_paid_on"] = utc_now_iso()
+        member["total_contributed"] = member.get("total_contributed", 0) + cost
         member["repayment_history"] = [*member.get("repayment_history", []), 100][-6:]
         member["score"] = member_score(member)
+        fund["pool_total"] += cost
         processed += 1
         append_contribution_history(
             fund,
@@ -933,7 +1013,7 @@ async def bulk_collect_live_contributions(fund_id: str):
     return {
         "message": f"Bulk collection processed for {processed} member(s).",
         "processed": processed,
-        "fund": serialize_fund(fund, None),
+        "fund": await serialize_fund(fund, None),
     }
 
 
@@ -987,6 +1067,15 @@ async def place_live_bid(fund_id: str, payload: LiveAuctionBidRequest):
         raise HTTPException(status_code=400, detail="This member is not eligible to bid in this cycle.")
     if payload.amount <= 0 or payload.amount > auction["pool_amount"]:
         raise HTTPException(status_code=400, detail="Bid must stay within the available pool.")
+    
+    # Restrict members to a single bid per auction cycle
+    for entry in auction.get("history", []):
+        if entry.get("bidder_email") == payload.bidderEmail.lower():
+            raise HTTPException(
+                status_code=400,
+                detail="You have already placed a bid in this cycle. Members are allowed only one bid per cycle.",
+            )
+
     if payload.amount >= auction["current_bid"]:
         raise HTTPException(
             status_code=400,
@@ -1018,7 +1107,7 @@ async def place_live_bid(fund_id: str, payload: LiveAuctionBidRequest):
     await db.funds.replace_one({"_id": fund["_id"]}, fund)
     return {
         "message": "Bid accepted. You are now leading the auction.",
-        "fund": serialize_fund(fund, payload.bidderEmail.lower()),
+        "fund": await serialize_fund(fund, payload.bidderEmail.lower()),
     }
 
 
@@ -1036,7 +1125,7 @@ async def close_live_auction(fund_id: str):
         return {
             "message": "Auction is already closed.",
             "result": auction["last_result"],
-            "fund": serialize_fund(fund, None),
+            "fund": await serialize_fund(fund, None),
         }
 
     leader = sorted(auction["history"], key=lambda item: item["amount"])[0]
@@ -1056,7 +1145,7 @@ async def close_live_auction(fund_id: str):
     fund["pool_total"] = max(fund["pool_total"] - auction["pool_amount"], 0)
     auction["is_active"] = False
     auction["time_left"] = 0
-    auction["last_result"] = {
+    result = {
         "cycle": fund["current_cycle"],
         "winner": winner["name"],
         "winnerEmail": winner["email"],
@@ -1066,6 +1155,7 @@ async def close_live_auction(fund_id: str):
         "bonusPerMember": bonus_per_member,
         "closedAt": utc_now_iso(),
     }
+    auction["last_result"] = result
     auction["previous_winners"] = [
         {
             "month": fund["current_cycle"],
@@ -1075,20 +1165,110 @@ async def close_live_auction(fund_id: str):
         },
         *auction.get("previous_winners", []),
     ][:12]
+
+    # Distribute the pool
+    # Logic: Add Payout to Winner's Global Wallet
+    await db.users.update_one(
+        {"email": winner["email"]},
+        {"$inc": {"wallet_balance": payout}}
+    )
+
+    add_activity(
+        fund,
+        "Winner Paid",
+        f"Verified payout of Rs {payout} sent to {winner['name']}'s wallet.",
+        "auction",
+        amount=payout,
+        user=winner['name']
+    )
+
+    fund["updated_at"] = utc_now_iso()
+    await db.funds.replace_one({"_id": fund_id}, fund)
+
+    return {
+        "message": "Auction closed successfully.",
+        "result": result,
+        "fund": await serialize_fund(fund, winner["email"]),
+    }
+
+
+@app.post("/api/funds/{fund_id}/demo/reset")
+async def demo_reset_auction(fund_id: str):
+    fund = await db.funds.find_one({"_id": fund_id})
+    if not fund:
+        raise HTTPException(status_code=404, detail="Fund not found.")
+    
+    auction = fund["auction"]
+    auction["is_active"] = True
+    auction["history"] = []
+    auction["time_left"] = 1800
+    auction["last_result"] = None
+    
+    # Optional: Reset current bid to pool amount
+    auction["current_bid"] = len(fund["members"]) * fund["monthly_installment"]
+    auction["highest_bidder"] = None
+    auction["highest_bidder_email"] = None
+
     fund["updated_at"] = utc_now_iso()
     add_activity(
         fund,
-        "Auction closed",
-        f"{winner['name']} won {format_inr(payout)}. Each member received {format_inr(bonus_per_member)} demo dividend.",
-        "system",
+        "System Reset",
+        "The auction has been reset for another demonstration.",
+        "system"
     )
     recompute_fund(fund)
     await db.funds.replace_one({"_id": fund["_id"]}, fund)
-    return {
-        "message": "Auction closed and balances distributed.",
-        "result": auction["last_result"],
-        "fund": serialize_fund(fund, winner["email"]),
-    }
+    return {"message": "Auction reset for demo.", "fund": await serialize_fund(fund, None)}
+
+
+@app.post("/api/funds/{fund_id}/demo/simulate-bid")
+async def simulate_ai_bid(fund_id: str):
+    fund = await db.funds.find_one({"_id": fund_id})
+    if not fund:
+        raise HTTPException(status_code=404, detail="Fund not found.")
+    
+    recompute_fund(fund)
+    auction = fund["auction"]
+    if not auction["is_active"]:
+        raise HTTPException(status_code=400, detail="Auction is not active.")
+    
+    # Eligible members are those who haven't won before
+    eligible = auction.get("eligible_members", [])
+    if not eligible:
+        raise HTTPException(status_code=400, detail="No eligible members to simulate.")
+    
+    # Pick a random member who is not the current highest bidder
+    current_highest = auction.get("highest_bidder_email")
+    others = [e for e in eligible if e != current_highest]
+    target_email = random.choice(others if others else [eligible[0]])
+    
+    member = find_member_by_email(fund, target_email)
+    if not member:
+         raise HTTPException(status_code=404, detail="Simulation target member not found.")
+
+    # Bid slightly lower than current bid by the minimum increment
+    new_amount = max(auction["bid_increment"], auction["current_bid"] - auction["bid_increment"])
+    
+    # Insert at beginning of history
+    auction["history"] = [
+        {
+            "bidder": member["name"],
+            "bidder_email": member["email"],
+            "amount": new_amount,
+            "time": utc_now_iso(),
+        },
+        *auction.get("history", []),
+    ][:20]
+    
+    add_activity(
+        fund,
+        "Competitive Bid",
+        f"{member['name']} outbid the previous best with {format_inr(new_amount)}.",
+        "bid"
+    )
+    recompute_fund(fund)
+    await db.funds.replace_one({"_id": fund["_id"]}, fund)
+    return {"message": f"Simulated bid by {member['name']} placed.", "fund": await serialize_fund(fund, None)}
 
 
 @app.post("/api/auction/bid")

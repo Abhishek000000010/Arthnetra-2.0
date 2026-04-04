@@ -60,6 +60,9 @@ interface FundContextType {
   recalculateTrust: () => void
   synthesizeBlueprint: (intent: string) => Promise<any>
   enforceProtocol: () => void
+  resetAuction: () => Promise<void>
+  simulateBid: () => Promise<void>
+  topupWallet: (amount?: number) => Promise<string>
   contributionSummary: ContributionSummary
 }
 
@@ -378,6 +381,48 @@ export function FundProvider({ children }: { children: React.ReactNode }) {
   const enforceProtocol = () => {}
   const synthesizeBlueprint = async (intent: string) => ({ intent })
 
+  const resetAuction = async () => {
+    if (!activeFundId) return
+    try {
+      const response = await ApiService.resetAuction(activeFundId)
+      setActiveFund(response.fund)
+    } catch {
+      // silent
+    }
+  }
+
+  const simulateBid = async () => {
+    if (!activeFundId) return
+    try {
+      const response = await ApiService.simulateBid(activeFundId)
+      setActiveFund(response.fund)
+    } catch {
+      // silent
+    }
+  }
+
+  const refreshBalance = async () => {
+    if (!user) return
+    try {
+      const data = await ApiService.getBalance(user.email)
+      setState(prev => ({ ...prev, myWalletBalance: data.walletBalance }))
+    } catch {
+      // silent
+    }
+  }
+
+  const topupWallet = async (amount: number = 5000) => {
+    if (!user) return 'Please login first.'
+    try {
+      const response = await ApiService.topupWallet(user.email, amount)
+      await refreshBalance()
+      if (activeFundId) await refreshFund()
+      return response.message
+    } catch (error) {
+      return error instanceof Error ? error.message : 'Could not topup wallet.'
+    }
+  }
+
   return (
     <FundContext.Provider
       value={{
@@ -402,6 +447,9 @@ export function FundProvider({ children }: { children: React.ReactNode }) {
         recalculateTrust,
         synthesizeBlueprint,
         enforceProtocol,
+        resetAuction,
+        simulateBid,
+        topupWallet,
         contributionSummary,
       }}
     >

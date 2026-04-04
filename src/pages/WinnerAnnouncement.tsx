@@ -113,12 +113,17 @@ export function WinnerAnnouncement() {
                 </div>
               </div>
 
-              <div className="p-5 rounded-2xl bg-primary/5 border border-primary/10 flex items-center gap-4 text-left w-full">
-                <ShieldCheck size={24} className="text-primary shrink-0" />
-                <div>
-                  <p className="text-[10px] font-label font-black uppercase text-primary mb-0.5">Verification Lock</p>
-                  <p className="text-[10px] font-mono opacity-40 truncate max-w-[200px]">{verificationHash}</p>
+              <div className="p-5 rounded-2xl bg-primary/5 border border-primary/10 flex items-center justify-between gap-4 text-left w-full">
+                <div className="flex items-center gap-4">
+                  <ShieldCheck size={24} className="text-primary shrink-0" />
+                  <div>
+                    <p className="text-[10px] font-label font-black uppercase text-primary mb-0.5">Verification Lock Hash</p>
+                    <p className="text-[10px] font-mono opacity-40 truncate max-w-[150px]">{verificationHash}</p>
+                  </div>
                 </div>
+                <a href="#" onClick={(e) => e.preventDefault()} className="text-[8px] font-label font-bold uppercase tracking-widest text-primary border border-primary/20 px-2 py-1 rounded-lg hover:bg-primary/5 transition-all">
+                   View on Chain
+                </a>
               </div>
             </motion.div>
 

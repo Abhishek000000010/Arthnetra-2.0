@@ -10,6 +10,7 @@ import {
   Users,
   TimerReset,
   Trophy,
+  ShieldCheck,
 } from 'lucide-react'
 import { cn } from '../utils/cn.ts'
 import { useFund } from '../context/FundContext'
@@ -17,7 +18,7 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 export function Auction() {
-  const { state, placeBid, closeAuction, hasActiveFund } = useFund()
+  const { state, placeBid, closeAuction, resetAuction, simulateBid, hasActiveFund } = useFund()
   const { user } = useAuth()
   const { auction, currentCycle } = state
   const [bidAmount, setBidAmount] = useState('')
@@ -28,6 +29,7 @@ export function Auction() {
   const minNextBid = Math.max(auction.currentBid - auction.bidIncrement, auction.bidIncrement)
   const isEligible = user ? auction.eligibleMembers.includes(user.email) : false
   const closedResult = auction.lastResult
+  const hasAlreadyBid = user ? auction.history.some(b => b.bidder_email === user.email) : false
 
   const aiRecommendation = useMemo(() => {
     const suggestedBid = Math.max(auction.currentBid - auction.bidIncrement * 2, auction.bidIncrement)
@@ -41,6 +43,11 @@ export function Auction() {
   const handleOpenConfirm = () => {
     if (!isEligible) {
       setMessage('You already won a previous cycle, so you are not eligible to bid again right now.')
+      return
+    }
+
+    if (hasAlreadyBid) {
+      setMessage('You have already placed a bid in this cycle.')
       return
     }
 
@@ -167,15 +174,28 @@ export function Auction() {
           </div>
         ) : null}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 space-y-8">
-            <section className="bg-surface-container-low rounded-2xl border border-white/5 p-8 relative overflow-hidden">
-              <div className="relative z-10">
-                <h3 className="text-lg font-headline font-bold mb-6 flex items-center gap-2">
-                  <Gavel size={18} className="text-primary" />
-                  {auction.isActive ? 'Place Your Reverse Bid' : 'Auction Outcome'}
-                </h3>
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-8">
+          <div className="space-y-8">
+            <section className="bg-surface-container-low rounded-3xl border border-white/5 p-8 shadow-xl relative overflow-hidden">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-[10px] font-label font-black tracking-[0.2em] uppercase text-primary">Live Reverse Auction</span>
+                    <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-[8px] font-bold uppercase tracking-widest">
+                       <ShieldCheck size={8} />
+                       Blockchain Verified
+                    </div>
+                  </div>
+                  <h2 className="text-3xl font-headline font-black text-on-surface">
+                    {auction.isActive ? 'Place Your Bid' : 'Auction Outcome'}
+                  </h2>
+                  <p className="text-sm text-on-surface-variant opacity-60">
+                    {auction.isActive ? 'Lowest bid at the end of the timer wins the pool.' : 'The auction has concluded.'}
+                  </p>
+                </div>
+              </div>
 
+              <div className="relative z-10">
                 {auction.isActive ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
                     <div className="space-y-4">
@@ -194,10 +214,10 @@ export function Auction() {
                       </div>
                       <button
                         onClick={handleOpenConfirm}
-                        disabled={!isEligible}
+                        disabled={!isEligible || hasAlreadyBid}
                         className="w-full bg-gradient-to-br from-primary to-primary-container text-on-primary py-4 rounded-xl font-headline font-bold text-lg shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:scale-100"
                       >
-                        Place Reverse Bid
+                        {hasAlreadyBid ? 'Bid Already Placed' : 'Place Reverse Bid'}
                       </button>
                       <div className="grid grid-cols-2 gap-4 text-xs text-on-surface-variant opacity-70">
                         <div>Current best bid: <span className="text-on-surface font-bold">{formatCurrency(auction.currentBid)}</span></div>
@@ -321,14 +341,38 @@ export function Auction() {
                 <p className="text-xs text-on-surface-variant opacity-60 mb-4">
                   Close the auction manually when the bidding window ends or during your demo.
                 </p>
+                <div className="space-y-3">
+                  <button
+                    onClick={() => { void handleCloseAuction() }}
+                    className="w-full rounded-xl bg-primary text-on-primary py-3 font-headline font-bold hover:bg-primary-container transition-colors"
+                  >
+                    Close Auction & Lock Winner
+                  </button>
+                  <button
+                    onClick={() => { void simulateBid() }}
+                    className="w-full rounded-xl border border-white/10 text-on-surface py-3 font-headline font-bold hover:bg-white/5 transition-colors"
+                  >
+                    Simulate AI Rival Bid
+                  </button>
+                </div>
+              </section>
+            ) : (
+                <section className="bg-surface-container-low rounded-2xl border border-white/5 p-6">
+                <h3 className="text-sm font-headline font-bold mb-4 flex items-center gap-2 text-error">
+                  <TimerReset size={16} />
+                  Demo Reset
+                </h3>
+                <p className="text-xs text-on-surface-variant opacity-60 mb-4 leading-relaxed">
+                  Auction is closed. Use the button below to instantly reset the cycle for the next judge.
+                </p>
                 <button
-            onClick={() => { void handleCloseAuction() }}
-                  className="w-full rounded-xl bg-primary text-on-primary py-3 font-headline font-bold"
+                  onClick={() => { void resetAuction() }}
+                  className="w-full rounded-xl bg-error/10 border border-error/30 text-error py-3 font-headline font-bold hover:bg-error/20 transition-all"
                 >
-                  Close Auction and Lock Winner
+                  Reset for Next Judge
                 </button>
               </section>
-            ) : null}
+            )}
           </div>
         </div>
       </main>

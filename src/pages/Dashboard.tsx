@@ -20,11 +20,12 @@ import { useFund } from '../context/FundContext'
 import { Link } from 'react-router-dom'
 
 export function Dashboard() {
-  const { state, contributionSummary, hasActiveFund, sendInviteEmail } = useFund()
-  const { poolTotal, currentCycle, trustHealth, members, contributionHistory, auction, fundName, fundCode, myWalletBalance, isCreator } = state
+  const { state, contributionSummary, hasActiveFund, sendInviteEmail, payContribution } = useFund()
+  const { poolTotal, currentCycle, trustHealth, members, contributionHistory, auction, fundName, fundCode, myWalletBalance, isCreator, myMemberId, monthlyInstallment } = state
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteNotice, setInviteNotice] = useState('')
   const [sendingInvite, setSendingInvite] = useState(false)
+  const [paying, setPaying] = useState(false)
 
   const handleSendInvite = async () => {
     if (!inviteEmail.trim()) {
@@ -39,6 +40,15 @@ export function Dashboard() {
     if (!message.toLowerCase().includes('could not') && !message.toLowerCase().includes('please') && !message.toLowerCase().includes('not configured')) {
       setInviteEmail('')
     }
+  }
+
+  const handlePayInstallment = async () => {
+    if (!myMemberId) return
+    setPaying(true)
+    const message = await payContribution(myMemberId)
+    setPaying(false)
+    // We should probably show a toast or message, but for now we rely on the state update
+    alert(message)
   }
 
   if (!hasActiveFund) {
@@ -177,7 +187,7 @@ export function Dashboard() {
         </div>
 
         <section className="mb-10 rounded-2xl border border-primary/20 bg-primary/5 p-6">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 text-center md:text-left">
             <div>
               <p className="text-[10px] font-label uppercase tracking-[0.2em] text-primary mb-2">Live Fund Room</p>
               <h2 className="text-2xl font-headline font-black text-on-surface">{fundName}</h2>
@@ -185,39 +195,74 @@ export function Dashboard() {
                 Share this code so another logged-in user can enter the same chit fund room.
               </p>
             </div>
-            <div className="rounded-2xl border border-primary/20 bg-surface px-6 py-4 text-center">
+            <div className="rounded-2xl border border-primary/20 bg-surface px-6 py-4">
               <p className="text-[10px] font-label uppercase tracking-[0.2em] text-on-surface-variant opacity-50">Fund Code</p>
               <p className="text-3xl font-headline font-black text-primary">{fundCode}</p>
             </div>
           </div>
 
-          {isCreator ? (
-            <div className="mt-6 rounded-2xl border border-white/5 bg-surface-container-low p-5">
-              <p className="text-[10px] font-label uppercase tracking-[0.2em] text-primary mb-2">Invite Through Twilio</p>
-              <p className="text-sm text-on-surface-variant opacity-70 mb-4">
-                Send the room code to a member by email through Twilio SendGrid.
-              </p>
-              <div className="flex flex-col md:flex-row gap-3">
-                <input
-                  type="email"
-                  value={inviteEmail}
-                  onChange={(event) => setInviteEmail(event.target.value)}
-                  placeholder="member@example.com"
-                  className="flex-1 rounded-2xl border border-white/10 bg-surface px-4 py-3 text-on-surface outline-none focus:border-primary/50"
-                />
-                <button
-                  onClick={() => { void handleSendInvite() }}
-                  disabled={sendingInvite}
-                  className="rounded-2xl bg-primary px-5 py-3 text-sm font-headline font-bold text-on-primary disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {sendingInvite ? 'Sending...' : 'Send Invite Email'}
-                </button>
+          <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* My Personal Installment Card */}
+            <div className="rounded-2xl border border-white/5 bg-surface-container-low p-6 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="p-2 rounded-lg bg-secondary/10 text-secondary border border-secondary/20">
+                    <Clock3 size={20} />
+                  </div>
+                  {members.find(m => m.id === myMemberId)?.status === 'paid' ? (
+                     <span className="text-[10px] bg-primary/20 text-primary px-2 py-1 rounded-full font-label font-bold uppercase tracking-widest">Completed</span>
+                  ) : (
+                     <span className="text-[10px] bg-error/20 text-error px-2 py-1 rounded-full font-label font-bold uppercase tracking-widest">Penalty Risk</span>
+                  )}
+                </div>
+                <p className="text-xs font-label uppercase tracking-widest text-on-surface-variant opacity-60 mb-1">Monthly Installment</p>
+                <h3 className="text-2xl font-headline font-black mb-2">{formatCurrency(monthlyInstallment)}</h3>
+                <p className="text-xs text-on-surface-variant opacity-60">Status: {members.find(m => m.id === myMemberId)?.status || 'checking...'}</p>
               </div>
-              {inviteNotice ? (
-                <p className="mt-3 text-sm text-on-surface-variant">{inviteNotice}</p>
-              ) : null}
+              <button
+                disabled={paying || members.find(m => m.id === myMemberId)?.status === 'paid'}
+                onClick={() => { void handlePayInstallment() }}
+                className="mt-6 w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-secondary text-on-secondary text-sm font-headline font-bold disabled:opacity-50 disabled:cursor-not-allowed hover:scale-[1.02] active:scale-[0.98] transition-all"
+              >
+                {paying ? 'Processing...' : members.find(m => m.id === myMemberId)?.status === 'paid' ? 'Installment Paid' : 'Pay Monthly Now'}
+              </button>
             </div>
-          ) : null}
+
+            {/* Invite Card */}
+            {isCreator ? (
+              <div className="rounded-2xl border border-white/5 bg-surface-container-low p-6">
+                <p className="text-[10px] font-label uppercase tracking-[0.2em] text-primary mb-2">Invite Through Gmail</p>
+                <p className="text-sm text-on-surface-variant opacity-70 mb-4">
+                  Send the room code to a member by email.
+                </p>
+                <div className="flex flex-col gap-3">
+                  <input
+                    type="email"
+                    value={inviteEmail}
+                    onChange={(event) => setInviteEmail(event.target.value)}
+                    placeholder="member@example.com"
+                    className="flex-1 rounded-2xl border border-white/10 bg-surface px-4 py-3 text-on-surface outline-none focus:border-primary/50"
+                  />
+                  <button
+                    onClick={() => { void handleSendInvite() }}
+                    disabled={sendingInvite}
+                    className="w-full rounded-2xl bg-primary px-5 py-3 text-sm font-headline font-bold text-on-primary disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {sendingInvite ? 'Sending...' : 'Send Invite Email'}
+                  </button>
+                </div>
+                {inviteNotice ? (
+                  <p className="mt-3 text-sm text-on-surface-variant text-center">{inviteNotice}</p>
+                ) : null}
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-white/5 bg-surface-container-low p-6 flex items-center justify-center text-center">
+                 <div>
+                   <p className="text-sm font-headline font-bold opacity-60 italic">Your contributions maintain your trust score and eligibility for bidding.</p>
+                 </div>
+              </div>
+            )}
+          </div>
         </section>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

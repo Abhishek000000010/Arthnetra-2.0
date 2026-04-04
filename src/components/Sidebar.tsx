@@ -29,17 +29,60 @@ const menuItems = [
 export function Sidebar() {
   const location = useLocation()
   const { signOutUser } = useAuth()
-  const { unreadNotificationCount } = useFund()
+  const { state, topupWallet, unreadNotificationCount } = useFund()
 
   return (
     <aside className="w-64 h-screen bg-surface-container-low border-r border-white/5 flex flex-col p-6 fixed left-0 top-0 z-20">
       {/* Logo */}
-      <Link to="/" className="flex items-center gap-3 mb-12 group">
+      <Link to="/" className="flex items-center gap-3 mb-8 group">
         <div className="relative w-8 h-8 flex items-center justify-center bg-surface-container-high rounded-full border border-white/10 shadow-[0_0_15px_rgba(196,192,255,0.15)] group-hover:scale-110 transition-transform">
           <span className="material-symbols-outlined text-primary text-lg" style={{ fontVariationSettings: "'FILL' 1" }}>visibility</span>
         </div>
         <span className="font-headline font-black text-primary tracking-tight text-lg">ArthaNetra</span>
       </Link>
+
+      {/* Enhanced ArthaNetra Demo Wallet */}
+      <div className="mb-10 p-6 rounded-[24px] bg-surface-container-high border border-white/10 relative group/wallet overflow-visible shadow-2xl shadow-primary/5">
+        {/* Animated Background Mesh */}
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-primary/5 rounded-[24px] opacity-50 group-hover/wallet:opacity-100 transition-opacity duration-500" />
+        
+        <div className="relative z-10">
+          <div className="flex justify-between items-center mb-4">
+            <span className="px-2 py-0.5 rounded-full bg-primary/20 text-primary text-[8px] font-black uppercase tracking-tighter border border-primary/20">
+              Demo Account
+            </span>
+            <div className="w-8 h-8 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-primary/60 group-hover/wallet:text-primary transition-colors">
+              <Wallet size={16} />
+            </div>
+          </div>
+          
+          <p className="text-[10px] font-label font-medium text-on-surface-variant opacity-40 uppercase tracking-[0.1em] mb-1">Available Funds</p>
+          <div className="flex items-baseline gap-2 mb-6">
+            <span className="text-3xl font-headline font-black text-on-surface tracking-tighter">
+              ₹{(state.myWalletBalance || 10000).toLocaleString('en-IN')}
+            </span>
+            <span className="text-xs font-bold text-primary/40 uppercase">INR</span>
+          </div>
+
+          <button 
+            onClick={async (e) => { 
+                e.preventDefault(); 
+                const msg = await topupWallet();
+                alert(msg);
+            }}
+            className="w-full group/btn relative overflow-hidden flex items-center justify-center py-3.5 rounded-2xl bg-primary text-on-primary text-xs font-headline font-black uppercase tracking-widest transition-all hover:translate-y-[-2px] hover:shadow-xl hover:shadow-primary/30 active:translate-y-[1px] active:scale-[0.98]"
+          >
+            <div className="absolute inset-0 bg-white/20 translate-y-[100%] group-hover/btn:translate-y-0 transition-transform duration-300" />
+            <div className="relative z-10 flex items-center gap-2">
+              <span className="material-symbols-outlined text-sm">bolt</span>
+              Quick Top Up
+            </div>
+          </button>
+        </div>
+
+        {/* Decorative elements to fix the visual 'cut-off' feel */}
+        <div className="absolute -top-1 -right-1 w-20 h-20 bg-primary/5 blur-3xl opacity-0 group-hover/wallet:opacity-100 transition-opacity" />
+      </div>
 
       {/* Nav Items */}
       <nav className="flex-1 space-y-1">

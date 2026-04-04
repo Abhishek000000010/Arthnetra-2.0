@@ -135,7 +135,7 @@ export const ApiService = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(user),
     })
-    return parseResponse<{ user: { id: string; name: string; email: string; picture?: string; provider: 'google' } }>(response)
+    return parseResponse<any>(response)
   },
 
   async createFund(payload: {
@@ -204,13 +204,23 @@ export const ApiService = {
     return parseResponse<{ fund: LiveFundState }>(response)
   },
 
-  async payContribution(fundId: string, memberId: string) {
-    const response = await fetch(`${API_BASE}/funds/${fundId}/contributions/pay`, {
+  async payContribution(fund_id: string, member_id: string) {
+    const response = await fetch(`${API_BASE}/funds/${fund_id}/pay/${member_id}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ memberId }),
     })
     return parseResponse<{ message: string; fund: LiveFundState }>(response)
+  },
+
+  async topupWallet(email: string, amount: number) {
+    const response = await fetch(`${API_BASE}/user/wallet/topup?email=${encodeURIComponent(email)}&amount=${amount}`, {
+      method: 'POST',
+    })
+    return parseResponse<{ message: string; new_balance: number }>(response)
+  },
+
+  async getBalance(email: string) {
+    const response = await fetch(`${API_BASE}/user/balance?email=${encodeURIComponent(email)}`)
+    return parseResponse<{ walletBalance: number }>(response)
   },
 
   async bulkCollect(fundId: string) {
@@ -243,5 +253,19 @@ export const ApiService = {
       method: 'POST',
     })
     return parseResponse<{ message: string; result: LiveAuctionResult; fund: LiveFundState }>(response)
+  },
+
+  async resetAuction(fundId: string) {
+    const response = await fetch(`${API_BASE}/funds/${fundId}/demo/reset`, {
+      method: 'POST',
+    })
+    return parseResponse<{ message: string; fund: LiveFundState }>(response)
+  },
+
+  async simulateBid(fundId: string) {
+    const response = await fetch(`${API_BASE}/funds/${fundId}/demo/simulate-bid`, {
+      method: 'POST',
+    })
+    return parseResponse<{ message: string; fund: LiveFundState }>(response)
   },
 }
