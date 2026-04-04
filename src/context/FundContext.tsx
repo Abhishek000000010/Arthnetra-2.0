@@ -49,9 +49,8 @@ interface FundContextType {
     groupSize: number
     durationMonths: number
     monthlyInstallment: number
-    joinPassword: string
   }) => Promise<{ error: string | null; fund: LiveFundState | null }>
-  joinLiveFund: (payload: { code: string; password: string }) => Promise<{ error: string | null; fund: LiveFundState | null }>
+  joinLiveFund: (payload: { code: string }) => Promise<{ error: string | null; fund: LiveFundState | null }>
   refreshFund: () => Promise<void>
   placeBid: (amount: number) => Promise<BidOutcome>
   closeAuction: () => Promise<LiveAuctionResult | null>
@@ -276,7 +275,6 @@ export function FundProvider({ children }: { children: React.ReactNode }) {
     groupSize: number
     durationMonths: number
     monthlyInstallment: number
-    joinPassword: string
   }) => {
     if (!user) return { error: 'Please login first.', fund: null }
 
@@ -294,7 +292,7 @@ export function FundProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const joinLiveFund = async (payload: { code: string; password: string }) => {
+  const joinLiveFund = async (payload: { code: string }) => {
     if (!user) return { error: 'Please login first.', fund: null }
 
     try {

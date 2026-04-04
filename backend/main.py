@@ -341,7 +341,6 @@ def create_fund_document(payload: dict) -> dict:
         "code": code,
         "name": payload["fund_name"],
         "purpose": payload["purpose"],
-        "join_password_hash": hash_password(payload["join_password"]),
         "creator_name": payload["creator_name"],
         "creator_email": payload["creator_email"].lower(),
         "group_size": payload["group_size"],
@@ -399,7 +398,7 @@ def send_invite_email_via_smtp(payload: dict) -> None:
       <p><strong>Fund Code:</strong> {payload['fundCode']}</p>
       <p><strong>Join Page:</strong> <a href="{payload['joinPageUrl']}">{payload['joinPageUrl']}</a></p>
       <p>{payload['message']}</p>
-      <p style="margin-top:24px">Open the join page, enter the fund code above, and then use the room password shared by the creator.</p>
+      <p style="margin-top:24px">Open the join page and enter the fund code above to join the chit fund room.</p>
       <p style="color:#6b7280;font-size:12px">This invite was sent from the ArthaNetra demo using Gmail SMTP.</p>
     </div>
     """.strip()
@@ -473,7 +472,6 @@ class CreateLiveFundRequest(BaseModel):
     groupSize: int
     durationMonths: int
     monthlyInstallment: int
-    joinPassword: str
     creatorName: str
     creatorEmail: str
     creatorPicture: str | None = None
@@ -481,7 +479,6 @@ class CreateLiveFundRequest(BaseModel):
 
 class JoinLiveFundRequest(BaseModel):
     code: str
-    password: str
     name: str
     email: str
     picture: str | None = None
@@ -709,8 +706,6 @@ async def list_public_funds():
 
 @app.post("/api/funds/create")
 async def create_live_fund(payload: CreateLiveFundRequest):
-    if len(payload.joinPassword.strip()) < 4:
-        raise HTTPException(status_code=400, detail="Join password must be at least 4 characters.")
     if payload.groupSize < 2:
         raise HTTPException(status_code=400, detail="Group size must be at least 2.")
     if payload.monthlyInstallment <= 0:
@@ -723,7 +718,6 @@ async def create_live_fund(payload: CreateLiveFundRequest):
             "group_size": payload.groupSize,
             "duration_months": payload.durationMonths,
             "monthly_installment": payload.monthlyInstallment,
-            "join_password": payload.joinPassword,
             "creator_name": payload.creatorName.strip(),
             "creator_email": payload.creatorEmail.strip().lower(),
             "creator_picture": payload.creatorPicture,
@@ -743,8 +737,6 @@ async def join_live_fund(payload: JoinLiveFundRequest):
     fund = await db.funds.find_one({"code": code})
     if not fund:
         raise HTTPException(status_code=404, detail="No chit fund found with that code.")
-    if not verify_password(payload.password, fund["join_password_hash"]):
-        raise HTTPException(status_code=401, detail="Incorrect join password.")
     if len(fund.get("members", [])) >= fund["group_size"]:
         raise HTTPException(status_code=409, detail="This chit fund is already full.")
 
@@ -839,8 +831,8 @@ async def request_join_code_email(fund_id: str, payload: RequestJoinCodeEmailReq
         "creatorName": fund["creator_name"],
         "joinPageUrl": os.getenv("FRONTEND_BASE_URL", "http://127.0.0.1:5173") + "/join",
         "message": (
-            f"Hi {payload.recipientName.strip()}, use code {fund['code']} on the join page to request entry into "
-            f"{fund['name']}. Ask the creator for the room password if needed."
+            f"Hi {payload.recipientName.strip()}, use code {fund['code']} on the join page to join "
+            f"{fund['name']}."
         ),
     }
 

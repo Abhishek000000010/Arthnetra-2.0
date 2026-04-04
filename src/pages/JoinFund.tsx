@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Navigate, Link, useNavigate } from 'react-router-dom'
-import { Eye, KeyRound, Mail, Users } from 'lucide-react'
+import { Eye, Mail, Users, LogIn } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useFund } from '../context/FundContext'
 import { ApiService, type PublicFundCard } from '../services/ApiService'
@@ -10,7 +10,6 @@ export function JoinFund() {
   const { joinLiveFund } = useFund()
   const navigate = useNavigate()
   const [code, setCode] = useState('')
-  const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -46,7 +45,7 @@ export function JoinFund() {
     setError('')
     setNotice('')
     setSubmitting(true)
-    const result = await joinLiveFund({ code, password })
+    const result = await joinLiveFund({ code })
     setSubmitting(false)
 
     if (result.error) {
@@ -89,7 +88,7 @@ export function JoinFund() {
           </div>
 
           <p className="text-sm text-on-surface-variant opacity-70 mb-6">
-            When another user clicks join on one of these live rooms, they can receive the join code by email and then enter it below with the password.
+            Browse available live rooms below. Click "Get Join Code by Email" to receive the code, then enter it on the right to join.
           </p>
 
           {error ? <div className="mb-5 rounded-2xl border border-error/20 bg-error/10 p-4 text-sm text-error">{error}</div> : null}
@@ -137,11 +136,11 @@ export function JoinFund() {
         <section className="bg-surface-container-low border border-white/5 rounded-3xl p-8 shadow-2xl h-fit">
           <div className="flex items-center gap-3 mb-6">
             <div className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 text-primary flex items-center justify-center">
-              <KeyRound size={22} />
+              <LogIn size={22} />
             </div>
             <div>
               <p className="text-xs font-label uppercase tracking-[0.2em] opacity-50">Manual Join</p>
-              <h2 className="text-2xl font-headline font-black text-on-surface">Enter Code and Password</h2>
+              <h2 className="text-2xl font-headline font-black text-on-surface">Enter Fund Code</h2>
             </div>
           </div>
 
@@ -162,22 +161,6 @@ export function JoinFund() {
               </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-label uppercase tracking-[0.2em] text-on-surface-variant mb-2">
-                Fund Password
-              </label>
-              <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-surface px-4 py-3">
-                <KeyRound size={18} className="text-primary" />
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  className="w-full bg-transparent text-on-surface outline-none"
-                  placeholder="Enter room password"
-                  required
-                />
-              </div>
-            </div>
 
             <button
               type="submit"

@@ -95,7 +95,7 @@ export function Auction() {
           <div className="max-w-xl rounded-[2rem] border border-white/5 bg-surface-container-low p-10 text-center">
             <h1 className="text-4xl font-headline font-black text-on-surface mb-4">No Live Fund Yet</h1>
             <p className="text-on-surface-variant opacity-60 mb-8">
-              Create a live fund room or join one with a code and password before running the auction.
+              Create a live fund room or join one with a code before running the auction.
             </p>
             <div className="flex justify-center gap-3">
               <Link to="/create" className="rounded-2xl bg-primary px-6 py-4 font-headline font-bold text-on-primary">Create Fund</Link>

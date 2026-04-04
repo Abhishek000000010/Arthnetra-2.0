@@ -35,7 +35,7 @@ export function CreateFund() {
   const [purpose, setPurpose] = useState('')
   const [groupSize, setGroupSize] = useState(10)
   const [durationMonths, setDurationMonths] = useState(12)
-  const [joinPassword, setJoinPassword] = useState('')
+
   const [loading, setLoading] = useState(false)
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
@@ -67,10 +67,6 @@ export function CreateFund() {
   }
 
   const handleCreateFund = async () => {
-    if (joinPassword.trim().length < 4) {
-      setError('Set a join password with at least 4 characters.')
-      return
-    }
 
     setCreating(true)
     setError('')
@@ -97,7 +93,6 @@ export function CreateFund() {
       groupSize,
       durationMonths,
       monthlyInstallment: parseMoney(blueprint.monthlyInstallment),
-      joinPassword: joinPassword.trim(),
     })
 
     setCreating(false)
@@ -108,7 +103,7 @@ export function CreateFund() {
     }
 
     setStep(3)
-    setCreationNotice(`Live fund created. Share code ${created.fund.fundCode} and your room password so other users can join.`)
+    setCreationNotice(`Live fund created! Share code ${created.fund.fundCode} with other users so they can join.`)
     navigate('/dashboard')
   }
 
@@ -197,16 +192,6 @@ export function CreateFund() {
               </button>
 
               <div className="rounded-2xl border border-white/5 bg-surface-container-low p-5 space-y-4">
-                <div>
-                  <label className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant opacity-40">Join Password</label>
-                  <input
-                    type="password"
-                    value={joinPassword}
-                    onChange={(event) => setJoinPassword(event.target.value)}
-                    placeholder="Set a password other members must enter"
-                    className="mt-2 w-full rounded-xl border border-white/10 bg-surface px-4 py-3 text-on-surface focus:outline-none focus:border-primary/50"
-                  />
-                </div>
 
                 <button
                   onClick={handleCreateFund}

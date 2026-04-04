@@ -49,7 +49,7 @@ export function Dashboard() {
           <div className="max-w-2xl rounded-[2rem] border border-white/5 bg-surface-container-low p-10 text-center">
             <h1 className="text-4xl font-headline font-black text-on-surface mb-4">Start a Live Chit Fund</h1>
             <p className="text-on-surface-variant opacity-60 mb-4">
-              Create a fund room, share the code and password, and other logged-in users will see the same live state.
+              Create a fund room, share the code, and other logged-in users will see the same live state.
             </p>
             <p className="text-primary font-headline font-bold">This dashboard becomes shared and real-time after create or join.</p>
           </div>
@@ -182,7 +182,7 @@ export function Dashboard() {
               <p className="text-[10px] font-label uppercase tracking-[0.2em] text-primary mb-2">Live Fund Room</p>
               <h2 className="text-2xl font-headline font-black text-on-surface">{fundName}</h2>
               <p className="text-sm text-on-surface-variant opacity-70">
-                Share this code and your join password so another logged-in user can enter the same chit fund room.
+                Share this code so another logged-in user can enter the same chit fund room.
               </p>
             </div>
             <div className="rounded-2xl border border-primary/20 bg-surface px-6 py-4 text-center">

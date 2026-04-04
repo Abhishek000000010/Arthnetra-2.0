@@ -144,7 +144,6 @@ export const ApiService = {
     groupSize: number
     durationMonths: number
     monthlyInstallment: number
-    joinPassword: string
     creatorName: string
     creatorEmail: string
     creatorPicture?: string
@@ -159,7 +158,6 @@ export const ApiService = {
 
   async joinFund(payload: {
     code: string
-    password: string
     name: string
     email: string
     picture?: string
