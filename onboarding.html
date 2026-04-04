@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>ArthaNetra - The Sovereign Ledger</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface-tint": "#c4c0ff",
+                    "secondary-container": "#3e4a5b",
+                    "surface-container-high": "#25293a",
+                    "on-surface-variant": "#c7c4d8",
+                    "on-secondary-fixed-variant": "#3c4859",
+                    "on-primary-container": "#1b0091",
+                    "surface-container-low": "#161b2b",
+                    "surface-bright": "#343949",
+                    "on-background": "#dee1f7",
+                    "surface-dim": "#0e1322",
+                    "inverse-on-surface": "#2b3040",
+                    "on-tertiary-fixed": "#002112",
+                    "on-surface": "#dee1f7",
+                    "surface-container-highest": "#2f3445",
+                    "on-secondary-fixed": "#101c2c",
+                    "tertiary-container": "#00a56d",
+                    "on-primary": "#2000a4",
+                    "tertiary-fixed-dim": "#27e199",
+                    "on-secondary-container": "#adb9ce",
+                    "on-error": "#690005",
+                    "secondary-fixed-dim": "#bbc7dc",
+                    "on-error-container": "#ffdad6",
+                    "outline": "#918fa1",
+                    "surface-container": "#1a1f2f",
+                    "outline-variant": "#464555",
+                    "on-primary-fixed": "#100069",
+                    "surface-container-lowest": "#090e1c",
+                    "on-tertiary": "#003822",
+                    "tertiary-fixed": "#54feb3",
+                    "background": "#0e1322",
+                    "surface": "#0e1322",
+                    "secondary-fixed": "#d7e3f9",
+                    "inverse-surface": "#dee1f7",
+                    "primary": "#c4c0ff",
+                    "error-container": "#93000a",
+                    "error": "#ffb4ab",
+                    "primary-fixed-dim": "#c4c0ff",
+                    "on-tertiary-fixed-variant": "#005234",
+                    "secondary": "#bbc7dc",
+                    "tertiary": "#27e199",
+                    "primary-fixed": "#e3dfff",
+                    "surface-variant": "#2f3445",
+                    "on-secondary": "#253141",
+                    "primary-container": "#8781ff",
+                    "on-primary-fixed-variant": "#3622ca",
+                    "inverse-primary": "#4f44e2",
+                    "on-tertiary-container": "#00311d"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "fontFamily": {
+                    "headline": ["Inter"],
+                    "body": ["Inter"],
+                    "label": ["Inter"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .currency-fragment {
+            font-variant-numeric: tabular-nums;
+        }
+        .network-lines {
+            background-image: radial-gradient(circle at 2px 2px, rgba(196, 192, 255, 0.05) 1px, transparent 0);
+            background-size: 40px 40px;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body selection:bg-primary/30 selection:text-primary">
+<!-- Onboarding Suppresses Navigation Shell per Protocol -->
+<main class="relative min-h-screen flex flex-col items-center justify-center px-6 overflow-hidden">
+<!-- Background Network Lines & Subtle Glow -->
+<div class="absolute inset-0 network-lines pointer-events-none"></div>
+<div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-primary/5 rounded-full blur-[120px] pointer-events-none"></div>
+<!-- Top Left Glowing Logo -->
+<div class="absolute top-10 left-10 flex items-center gap-3">
+<div class="relative w-12 h-12 flex items-center justify-center bg-surface-container-high rounded-full border border-white/10 shadow-[0_0_20px_rgba(196,192,255,0.15)]">
+<span class="material-symbols-outlined text-primary text-2xl" style="font-variation-settings: 'FILL' 1;">visibility</span>
+<div class="absolute -bottom-1 -right-1 bg-primary text-on-primary w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold">₹</div>
+</div>
+<span class="font-headline font-black text-primary tracking-tight text-xl">ArthaNetra</span>
+</div>
+<!-- Central Content Canvas -->
+<div class="relative z-10 flex flex-col items-center text-center max-w-3xl">
+<!-- Asymmetric Headline Layout -->
+<h1 class="font-headline text-[4rem] md:text-[6rem] leading-[1] font-extrabold tracking-tighter text-on-surface mb-6">
+                अर्थ को <span class="text-transparent bg-clip-text bg-gradient-to-r from-primary to-primary-container">देखो</span>
+</h1>
+<p class="text-on-surface-variant text-lg md:text-xl font-medium max-w-xl leading-relaxed mb-12">
+                AI-governed chit funds that think, adapt, and protect your group. Secure your collective future with institutional precision.
+            </p>
+<!-- Transactional CTAs -->
+<div class="flex flex-col sm:flex-row gap-4 w-full justify-center mb-24">
+<button class="bg-gradient-to-br from-primary to-primary-container text-on-primary px-10 py-5 rounded-full font-headline font-bold text-lg shadow-[0_0_15px_rgba(196,192,255,0.2)] hover:scale-105 active:scale-95 transition-all duration-300">
+                    Create a Fund
+                </button>
+<button class="border border-outline-variant bg-surface-container-lowest/50 backdrop-blur-md text-primary px-10 py-5 rounded-full font-headline font-bold text-lg hover:bg-white/5 transition-all">
+                    Join a Fund
+                </button>
+</div>
+<!-- Bento Stat Pills -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-4xl">
+<div class="bg-surface-container-low p-6 rounded-xl border border-white/5 backdrop-blur-sm flex flex-col items-center justify-center">
+<div class="flex items-baseline gap-1 mb-1">
+<span class="text-on-surface-variant text-sm font-label uppercase tracking-widest opacity-60">₹</span>
+<span class="text-3xl font-headline font-bold text-on-surface tabular-nums">2.4Cr</span>
+</div>
+<span class="text-xs font-label text-slate-400 tracking-wide">managed capital</span>
+</div>
+<div class="bg-surface-container-low p-6 rounded-xl border border-white/5 backdrop-blur-sm flex flex-col items-center justify-center">
+<div class="flex items-baseline gap-2 mb-1">
+<span class="text-3xl font-headline font-bold text-on-surface tabular-nums">1,240</span>
+<span class="material-symbols-outlined text-primary text-xl">verified_user</span>
+</div>
+<span class="text-xs font-label text-slate-400 tracking-wide">members trusted</span>
+</div>
+<div class="bg-surface-container-low p-6 rounded-xl border border-white/5 backdrop-blur-sm flex flex-col items-center justify-center">
+<div class="flex items-baseline gap-2 mb-1">
+<span class="text-3xl font-headline font-bold text-tertiary tabular-nums">98.2%</span>
+</div>
+<span class="text-xs font-label text-slate-400 tracking-wide">on-time contribution</span>
+</div>
+</div>
+</div>
+<!-- Bottom Anchor -->
+<div class="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 group cursor-pointer">
+<span class="text-on-surface-variant font-label text-xs tracking-[0.2em] uppercase transition-colors group-hover:text-primary">How it works</span>
+<div class="w-px h-12 bg-gradient-to-b from-primary to-transparent"></div>
+</div>
+<!-- Decorative Ethereal Gradients -->
+<div class="fixed top-0 right-0 w-[40vw] h-[409px] bg-primary/5 blur-[150px] -z-10 rounded-full"></div>
+<div class="fixed bottom-0 left-0 w-[40vw] h-[409px] bg-tertiary/5 blur-[150px] -z-10 rounded-full"></div>
+</main>
+<!-- Global Decoration: Editorial Grain -->
+<div class="fixed inset-0 pointer-events-none opacity-10 mix-blend-soft-light overflow-hidden">
+<div class="w-full h-full bg-slate-400/10"></div>
+</div>
+</body></html>
