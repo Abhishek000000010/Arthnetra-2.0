@@ -14,10 +14,26 @@ import {
   AlertCircle,
   Clock3,
   CheckCircle2,
+  Brain,
+  ShieldAlert,
+  TrendingDown,
+  Scan,
 } from 'lucide-react'
 import { cn } from '../utils/cn'
 import { useFund } from '../context/FundContext'
 import { Link } from 'react-router-dom'
+
+function getTrustLevel(health: number) {
+  if (health >= 90) return { label: 'PRISTINE', color: 'text-emerald-400', bg: 'bg-emerald-400', border: 'border-emerald-400/30', bgLight: 'bg-emerald-400/10', desc: 'All members are in good standing. Zero default risk detected.' }
+  if (health >= 70) return { label: 'CAUTION', color: 'text-amber-400', bg: 'bg-amber-400', border: 'border-amber-400/30', bgLight: 'bg-amber-400/10', desc: 'Irregular payment patterns detected. Monitor closely.' }
+  return { label: 'CRITICAL', color: 'text-red-400', bg: 'bg-red-400', border: 'border-red-400/30', bgLight: 'bg-red-400/10', desc: 'High probability of default. Recommend pausing auction until resolved.' }
+}
+
+function getMemberRisk(score: number): { label: string; color: string } {
+  if (score >= 900) return { label: 'Low Risk', color: 'text-emerald-400' }
+  if (score >= 700) return { label: 'Moderate', color: 'text-amber-400' }
+  return { label: 'High Risk', color: 'text-red-400' }
+}
 
 export function Dashboard() {
   const { state, contributionSummary, hasActiveFund, sendInviteEmail, payContribution } = useFund()
@@ -47,7 +63,6 @@ export function Dashboard() {
     setPaying(true)
     const message = await payContribution(myMemberId)
     setPaying(false)
-    // We should probably show a toast or message, but for now we rely on the state update
     alert(message)
   }
 
@@ -126,6 +141,8 @@ export function Dashboard() {
   ].slice(0, 6)
 
   const overdueMembers = members.filter((member) => member.status === 'overdue')
+  const graceMembers = members.filter((member) => member.status === 'grace')
+  const trustLevel = getTrustLevel(trustHealth)
 
   return (
     <div className="flex h-screen bg-surface">
@@ -155,7 +172,8 @@ export function Dashboard() {
           </div>
         </header>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
+        {/* Top Stat Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <StatCard
             label="Live Pool Total"
             value={formatCurrency(poolTotal)}
@@ -171,13 +189,6 @@ export function Dashboard() {
             color="secondary"
           />
           <StatCard
-            label="Trust Health"
-            value={`${trustHealth}%`}
-            icon={<ShieldCheck size={20} />}
-            trend={overdueMembers.length > 0 ? `${overdueMembers.length} overdue member(s)` : 'No overdue members'}
-            color="tertiary"
-          />
-          <StatCard
             label="Auction Status"
             value={auction.isActive ? 'Live' : 'Closed'}
             icon={<Gavel size={20} />}
@@ -186,6 +197,180 @@ export function Dashboard() {
           />
         </div>
 
+        {/* ════════════════════════════════════════════════════════════════════ */}
+        {/*  AI TRUST INTELLIGENCE PANEL                                       */}
+        {/* ════════════════════════════════════════════════════════════════════ */}
+        <motion.section
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className={cn(
+            "mb-10 rounded-[1.5rem] border p-8 relative overflow-hidden",
+            trustLevel.border,
+            trustLevel.bgLight
+          )}
+        >
+          {/* Background decoration */}
+          <div className="absolute inset-0 opacity-[0.03]" style={{
+            backgroundImage: `radial-gradient(circle at 20% 50%, currentColor 1px, transparent 1px), radial-gradient(circle at 80% 20%, currentColor 1px, transparent 1px)`,
+            backgroundSize: '40px 40px',
+          }} />
+
+          <div className="relative z-10">
+            {/* Header */}
+            <div className="flex items-center gap-3 mb-6">
+              <div className={cn("p-2.5 rounded-xl border", trustLevel.border, trustLevel.bgLight)}>
+                <Brain size={22} className={trustLevel.color} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg font-headline font-black text-on-surface">AI Trust Intelligence</h2>
+                  <span className={cn("text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border", trustLevel.color, trustLevel.border, trustLevel.bgLight)}>
+                    Live
+                  </span>
+                </div>
+                <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant opacity-50">
+                  Predictive risk analysis • 6-month behavioral pattern engine
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {/* Left: Big Gauge */}
+              <div className="flex flex-col items-center justify-center">
+                <div className="relative w-44 h-44">
+                  {/* Background ring */}
+                  <svg className="w-full h-full -rotate-90" viewBox="0 0 120 120">
+                    <circle cx="60" cy="60" r="50" fill="none" stroke="currentColor" className="text-white/5" strokeWidth="10" />
+                    <motion.circle
+                      cx="60" cy="60" r="50" fill="none"
+                      className={trustLevel.color}
+                      strokeWidth="10"
+                      strokeLinecap="round"
+                      strokeDasharray={`${2 * Math.PI * 50}`}
+                      initial={{ strokeDashoffset: 2 * Math.PI * 50 }}
+                      animate={{ strokeDashoffset: 2 * Math.PI * 50 * (1 - trustHealth / 100) }}
+                      transition={{ duration: 1.5, ease: "easeOut" }}
+                    />
+                  </svg>
+                  {/* Center text */}
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <motion.span
+                      className="text-4xl font-headline font-black text-on-surface tabular-nums"
+                      initial={{ opacity: 0, scale: 0.5 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: 0.3, duration: 0.5 }}
+                    >
+                      {trustHealth}%
+                    </motion.span>
+                    <span className="text-[9px] font-label uppercase tracking-widest text-on-surface-variant opacity-50">
+                      Fund Health
+                    </span>
+                  </div>
+                </div>
+
+                {/* Trust Level Badge */}
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.6 }}
+                  className={cn("mt-4 px-5 py-2 rounded-full border text-sm font-headline font-black tracking-wider", trustLevel.color, trustLevel.border, trustLevel.bgLight)}
+                >
+                  {trustLevel.label}
+                </motion.div>
+              </div>
+
+              {/* Center: AI Analysis */}
+              <div className="flex flex-col justify-center gap-4">
+                <div className="p-4 rounded-xl bg-surface/50 border border-white/5">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Scan size={14} className={trustLevel.color} />
+                    <span className="text-[10px] font-label font-black uppercase tracking-widest text-on-surface-variant opacity-60">AI Analysis</span>
+                  </div>
+                  <p className={cn("text-sm font-headline font-bold", trustLevel.color)}>
+                    {trustLevel.desc}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="text-center p-3 rounded-xl bg-surface/50 border border-white/5">
+                    <p className="text-xl font-headline font-black text-emerald-400">{contributionSummary.paidCount}</p>
+                    <p className="text-[9px] font-label uppercase tracking-widest opacity-40">On-Time</p>
+                  </div>
+                  <div className="text-center p-3 rounded-xl bg-surface/50 border border-white/5">
+                    <p className="text-xl font-headline font-black text-amber-400">{graceMembers.length}</p>
+                    <p className="text-[9px] font-label uppercase tracking-widest opacity-40">Grace</p>
+                  </div>
+                  <div className="text-center p-3 rounded-xl bg-surface/50 border border-white/5">
+                    <p className="text-xl font-headline font-black text-red-400">{overdueMembers.length}</p>
+                    <p className="text-[9px] font-label uppercase tracking-widest opacity-40">Default</p>
+                  </div>
+                </div>
+
+                {overdueMembers.length > 0 && (
+                  <div className="flex items-center gap-2 p-3 rounded-xl bg-red-400/10 border border-red-400/20">
+                    <ShieldAlert size={16} className="text-red-400 shrink-0" />
+                    <p className="text-xs text-red-400 font-bold">
+                      {overdueMembers.map(m => m.name).join(', ')} {overdueMembers.length === 1 ? 'has' : 'have'} defaulted. Trust score penalties applied.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Right: Per-Member Risk Breakdown */}
+              <div className="flex flex-col justify-center">
+                <p className="text-[10px] font-label font-black uppercase tracking-widest text-on-surface-variant opacity-50 mb-3">Member Risk Profile</p>
+                <div className="space-y-2 max-h-[220px] overflow-y-auto pr-2">
+                  {[...members].sort((a, b) => a.score - b.score).map((member) => {
+                    const risk = getMemberRisk(member.score)
+                    return (
+                      <div key={member.id} className="flex items-center gap-3 p-3 rounded-xl bg-surface/50 border border-white/5 group hover:border-white/10 transition-all">
+                        <div className="w-7 h-7 rounded-full overflow-hidden border border-white/10 shrink-0">
+                          <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${member.name}`} alt={member.name} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-headline font-bold text-on-surface truncate">{member.name}</p>
+                          <div className="w-full h-1.5 bg-white/5 rounded-full mt-1 overflow-hidden">
+                            <motion.div
+                              className={cn("h-full rounded-full", member.score >= 900 ? 'bg-emerald-400' : member.score >= 700 ? 'bg-amber-400' : 'bg-red-400')}
+                              initial={{ width: 0 }}
+                              animate={{ width: `${member.score / 10}%` }}
+                              transition={{ duration: 1, delay: 0.2 }}
+                            />
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-sm font-headline font-black tabular-nums">{member.score}</p>
+                          <p className={cn("text-[9px] font-label font-bold uppercase", risk.color)}>{risk.label}</p>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Recommendation Bar */}
+            <div className="mt-6 flex items-center gap-4 p-4 rounded-xl bg-surface/30 border border-white/5">
+              <div className={cn("p-2 rounded-lg", trustLevel.bgLight)}>
+                {trustHealth >= 90 ? <ShieldCheck size={18} className={trustLevel.color} /> : <TrendingDown size={18} className={trustLevel.color} />}
+              </div>
+              <div className="flex-1">
+                <p className="text-xs font-headline font-bold text-on-surface">
+                  {trustHealth >= 90 && 'Recommendation: Safe to proceed with next auction cycle.'}
+                  {trustHealth >= 70 && trustHealth < 90 && 'Recommendation: Suggest sending payment reminders before next auction.'}
+                  {trustHealth < 70 && 'Recommendation: Pause auction. Recover overdue payments before disbursement.'}
+                </p>
+                <p className="text-[10px] text-on-surface-variant opacity-50">Based on 6-month rolling behavioral pattern analysis</p>
+              </div>
+              <Link to="/tracker" className="shrink-0 text-[10px] font-label font-black uppercase tracking-widest text-primary hover:underline">
+                View Details →
+              </Link>
+            </div>
+          </div>
+        </motion.section>
+
+        {/* Fund Room Section */}
         <section className="mb-10 rounded-2xl border border-primary/20 bg-primary/5 p-6">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 text-center md:text-left">
             <div>
@@ -394,6 +579,7 @@ function StatCard({
 }
 
 function LeaderboardItem({ rank, name, score, detail, status }: any) {
+  const risk = getMemberRisk(score)
   return (
     <div className="flex items-center gap-4 p-4 rounded-xl hover:bg-white/5 transition-all border border-transparent hover:border-white/5 group">
       <div className="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center font-headline font-bold text-on-surface">
@@ -404,8 +590,8 @@ function LeaderboardItem({ rank, name, score, detail, status }: any) {
         <p className="text-xs text-on-surface-variant opacity-60">{detail}</p>
       </div>
       <div className="text-right">
-        <div className="text-lg font-headline font-black text-primary tabular-nums">{score}</div>
-        <p className="text-[10px] font-label tracking-widest uppercase opacity-40">{status}</p>
+        <div className={cn("text-lg font-headline font-black tabular-nums", risk.color)}>{score}</div>
+        <p className={cn("text-[10px] font-label tracking-widest uppercase font-bold", risk.color)}>{risk.label}</p>
       </div>
     </div>
   )
