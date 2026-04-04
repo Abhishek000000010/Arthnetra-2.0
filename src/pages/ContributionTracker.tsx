@@ -18,7 +18,7 @@ import { useFund, type Member, type MemberStatus } from '../context/FundContext'
 type FilterValue = 'all' | 'paid' | 'overdue' | 'grace'
 
 export function ContributionTracker() {
-  const { state, payContribution, updateMemberStatus, bulkCollectDue, contributionSummary } = useFund()
+  const { state, payContribution, updateMemberStatus, bulkCollectDue, contributionSummary, hasActiveFund } = useFund()
   const { members, monthlyInstallment, contributionHistory } = state
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<FilterValue>('all')
@@ -40,8 +40,8 @@ export function ContributionTracker() {
 
   const recentHistory = contributionHistory.slice(0, 5)
 
-  const handleBulkContribution = () => {
-    const processed = bulkCollectDue()
+  const handleBulkContribution = async () => {
+    const processed = await bulkCollectDue()
     setNotice(
       processed > 0
         ? `Bulk contribution completed for ${processed} members.`
@@ -83,6 +83,22 @@ export function ContributionTracker() {
     )
   }
 
+  if (!hasActiveFund) {
+    return (
+      <div className="flex h-screen bg-surface">
+        <Sidebar />
+        <main className="flex-1 ml-64 p-8 flex items-center justify-center">
+          <div className="max-w-xl rounded-[2rem] border border-white/5 bg-surface-container-low p-10 text-center">
+            <h1 className="text-4xl font-headline font-black text-on-surface mb-4">No Fund Members Yet</h1>
+            <p className="text-on-surface-variant opacity-60 mb-8">
+              This tracker becomes live once you create a fund room or join an existing chit fund.
+            </p>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
   return (
     <div className="flex h-screen bg-surface">
       <Sidebar />
@@ -109,7 +125,7 @@ export function ContributionTracker() {
               Export CSV
             </button>
             <button
-              onClick={handleBulkContribution}
+              onClick={() => { void handleBulkContribution() }}
               className="flex items-center gap-2 px-6 py-3 rounded-xl bg-primary text-on-primary font-headline font-bold text-sm shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
             >
               <Zap size={16} fill="currentColor" />
@@ -184,13 +200,13 @@ export function ContributionTracker() {
                       member={member}
                       amount={monthlyInstallment}
                       index={index}
-                      onPay={() => {
-                        payContribution(member.id)
-                        setNotice(`${member.name} has been marked as paid.`)
+                      onPay={async () => {
+                        const message = await payContribution(member.id)
+                        setNotice(message)
                       }}
-                      onStatusChange={(status) => {
-                        updateMemberStatus(member.id, status)
-                        setNotice(`${member.name} is now marked as ${status}.`)
+                      onStatusChange={async (status) => {
+                        const message = await updateMemberStatus(member.id, status)
+                        setNotice(message)
                       }}
                     />
                   ))
@@ -276,6 +292,7 @@ function MemberRow({
         <div className="min-w-0">
           <p className="font-headline font-bold text-on-surface truncate">{member.name}</p>
           <p className="text-[10px] font-mono opacity-30">{member.id}</p>
+          <p className="text-[10px] text-primary mt-1">Wallet: {formatCurrency(member.walletBalance)}</p>
         </div>
       </div>
       <div className="col-span-2 font-headline font-black text-on-surface tabular-nums">{formatCurrency(amount)}</div>

@@ -13,13 +13,12 @@ import {
 } from 'lucide-react'
 import { cn } from '../utils/cn.ts'
 import { useFund } from '../context/FundContext'
-import { ApiService } from '../services/ApiService'
 import { Link } from 'react-router-dom'
-
-const CURRENT_USER = 'Rahul Varma'
+import { useAuth } from '../context/AuthContext'
 
 export function Auction() {
-  const { state, placeBid, closeAuction } = useFund()
+  const { state, placeBid, closeAuction, hasActiveFund } = useFund()
+  const { user } = useAuth()
   const { auction, currentCycle } = state
   const [bidAmount, setBidAmount] = useState('')
   const [isBidding, setIsBidding] = useState(false)
@@ -27,7 +26,7 @@ export function Auction() {
   const [submitting, setSubmitting] = useState(false)
 
   const minNextBid = Math.max(auction.currentBid - auction.bidIncrement, auction.bidIncrement)
-  const isEligible = auction.eligibleMembers.includes(CURRENT_USER)
+  const isEligible = user ? auction.eligibleMembers.includes(user.email) : false
   const closedResult = auction.lastResult
 
   const aiRecommendation = useMemo(() => {
@@ -67,13 +66,7 @@ export function Auction() {
 
     setSubmitting(true)
     try {
-      try {
-        await ApiService.placeBid(parsed, CURRENT_USER)
-      } catch {
-        // The local auction should still work for demo reliability even if the backend save fails.
-      }
-
-      const outcome = placeBid(parsed, CURRENT_USER)
+      const outcome = await placeBid(parsed)
       setMessage(outcome.message)
 
       if (outcome.ok) {
@@ -85,13 +78,33 @@ export function Auction() {
     }
   }
 
-  const handleCloseAuction = () => {
-    const result = closeAuction()
+  const handleCloseAuction = async () => {
+    const result = await closeAuction()
     if (result) {
       setMessage(`Auction closed. ${result.winner} won Month ${result.cycle} with a bid of ${formatCurrency(result.winningBid)}.`)
     } else {
       setMessage('Auction closed.')
     }
+  }
+
+  if (!hasActiveFund) {
+    return (
+      <div className="flex h-screen bg-surface">
+        <Sidebar />
+        <main className="flex-1 ml-64 p-8 flex items-center justify-center">
+          <div className="max-w-xl rounded-[2rem] border border-white/5 bg-surface-container-low p-10 text-center">
+            <h1 className="text-4xl font-headline font-black text-on-surface mb-4">No Live Fund Yet</h1>
+            <p className="text-on-surface-variant opacity-60 mb-8">
+              Create a live fund room or join one with a code and password before running the auction.
+            </p>
+            <div className="flex justify-center gap-3">
+              <Link to="/create" className="rounded-2xl bg-primary px-6 py-4 font-headline font-bold text-on-primary">Create Fund</Link>
+              <Link to="/join" className="rounded-2xl border border-white/10 px-6 py-4 font-headline font-bold hover:bg-white/5">Join Fund</Link>
+            </div>
+          </div>
+        </main>
+      </div>
+    )
   }
 
   const formatTime = (seconds: number) => {
@@ -243,13 +256,13 @@ export function Auction() {
               </div>
 
               <div className="space-y-3">
-                {auction.history.map((bid, index) => (
+                        {auction.history.map((bid, index) => (
                   <BidderItem
                     key={`${bid.bidder}-${index}`}
                     name={bid.bidder}
                     amount={formatCurrency(bid.amount)}
                     isLeader={index === 0}
-                    isMe={bid.bidder === CURRENT_USER}
+                    isMe={bid.bidder_email === user?.email}
                     time={bid.time}
                   />
                 ))}
@@ -309,7 +322,7 @@ export function Auction() {
                   Close the auction manually when the bidding window ends or during your demo.
                 </p>
                 <button
-                  onClick={handleCloseAuction}
+            onClick={() => { void handleCloseAuction() }}
                   className="w-full rounded-xl bg-primary text-on-primary py-3 font-headline font-bold"
                 >
                   Close Auction and Lock Winner
@@ -381,7 +394,7 @@ function BidderItem({ name, amount, isLeader, isMe, time }: any) {
           {isMe ? <span className="text-[10px] font-label text-primary ml-2 uppercase tracking-widest">(You)</span> : null}
           {isLeader ? <span className="text-[10px] font-label text-primary ml-2 uppercase tracking-widest">(Leading)</span> : null}
         </p>
-        <p className="text-[10px] text-on-surface-variant opacity-40 uppercase tracking-widest">{time}</p>
+        <p className="text-[10px] text-on-surface-variant opacity-40 uppercase tracking-widest">{formatTimeStamp(time)}</p>
       </div>
       <div className="text-right">
         <p className="text-lg font-headline font-black text-on-surface tabular-nums">{amount}</p>
@@ -413,4 +426,10 @@ function ResultBox({ label, value }: { label: string; value: string }) {
 
 function formatCurrency(amount: number) {
   return `Rs ${amount.toLocaleString('en-IN')}`
+}
+
+function formatTimeStamp(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleString('en-IN', { hour: 'numeric', minute: '2-digit' })
 }

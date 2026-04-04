@@ -11,8 +11,24 @@ import { Link } from 'react-router-dom'
 import { useFund } from '../context/FundContext'
 
 export function WinnerAnnouncement() {
-  const { state } = useFund()
+  const { state, hasActiveFund } = useFund()
   const result = state.auction.lastResult
+
+  if (!hasActiveFund) {
+    return (
+      <div className="flex h-screen bg-surface overflow-hidden">
+        <Sidebar />
+        <main className="flex-1 ml-64 p-8 flex items-center justify-center">
+          <div className="max-w-xl w-full rounded-[2rem] border border-white/5 bg-surface-container-low p-10 text-center">
+            <h1 className="text-4xl font-headline font-black text-on-surface mb-4">No Fund Room Yet</h1>
+            <p className="text-on-surface-variant opacity-60">
+              Create or join a live fund first, then this screen will announce the real winner for every connected user.
+            </p>
+          </div>
+        </main>
+      </div>
+    )
+  }
 
   if (!result) {
     return (
@@ -127,7 +143,7 @@ export function WinnerAnnouncement() {
                     <span className="text-xl font-headline font-black tabular-nums text-tertiary">{formatCurrency(result.groupDividend)}</span>
                   </div>
                   <p className="text-[10px] font-label uppercase tracking-widest opacity-40">
-                    Generated from the difference between the pool amount and the winning bid.
+                    Generated from the difference between the pool amount and the winning bid. Each member received {formatCurrency(result.bonusPerMember || 0)} demo credit.
                   </p>
                 </div>
               </div>

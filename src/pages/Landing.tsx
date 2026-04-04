@@ -1,7 +1,10 @@
 import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 
 export function Landing() {
+  const { user } = useAuth()
+
   return (
     <main className="relative min-h-screen flex flex-col items-center justify-start px-6 pt-24 pb-20 overflow-x-hidden overflow-y-auto">
       <div className="absolute inset-0 network-lines pointer-events-none"></div>
@@ -50,16 +53,16 @@ export function Landing() {
           className="flex flex-col sm:flex-row gap-4 w-full justify-center mb-16"
         >
           <Link
-            to="/create"
+            to={user ? '/create' : '/signup'}
             className="bg-gradient-to-br from-primary to-primary-container text-on-primary px-10 py-5 rounded-full font-headline font-bold text-lg shadow-[0_0_15px_rgba(196,192,255,0.2)] hover:scale-105 active:scale-95 transition-all duration-300 cursor-pointer text-center"
           >
-            Create a Fund
+            {user ? 'Create a Fund' : 'Get Started'}
           </Link>
           <Link
-            to="/dashboard"
+            to={user ? '/join' : '/login'}
             className="border border-outline-variant bg-surface-container-lowest/50 backdrop-blur-md text-primary px-10 py-5 rounded-full font-headline font-bold text-lg hover:bg-white/5 transition-all cursor-pointer text-center"
           >
-            Join a Fund
+            {user ? 'Join a Fund' : 'Login'}
           </Link>
         </motion.div>
 

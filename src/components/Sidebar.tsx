@@ -14,6 +14,8 @@ import {
   Trophy
 } from 'lucide-react'
 import { cn } from '../utils/cn.ts'
+import { useAuth } from '../context/AuthContext'
+import { useFund } from '../context/FundContext'
 
 const menuItems = [
   { icon: Home, label: 'Dashboard', path: '/dashboard' },
@@ -26,6 +28,8 @@ const menuItems = [
 
 export function Sidebar() {
   const location = useLocation()
+  const { signOutUser } = useAuth()
+  const { unreadNotificationCount } = useFund()
 
   return (
     <aside className="w-64 h-screen bg-surface-container-low border-r border-white/5 flex flex-col p-6 fixed left-0 top-0 z-20">
@@ -68,7 +72,14 @@ export function Sidebar() {
       {/* Utility Nav */}
       <div className="pt-6 border-t border-white/5 space-y-1">
          <SidebarLink label="Member Profile" path="/profile" icon={<Users size={18} />} active={location.pathname === '/profile'} />
-         <SidebarLink label="Security Alerts" path="/default" icon={<ShieldAlert size={18} />} active={location.pathname === '/default'} />
+         <SidebarLink label="Join Fund" path="/join" icon={<Wallet size={18} />} active={location.pathname === '/join'} />
+         <SidebarLink
+           label="Notifications"
+           path="/default"
+           icon={<ShieldAlert size={18} />}
+           active={location.pathname === '/default'}
+           badge={unreadNotificationCount > 0 ? String(unreadNotificationCount) : undefined}
+         />
          <SidebarLink label="Winner Circle" path="/winner" icon={<Trophy size={18} />} active={location.pathname === '/winner'} />
       </div>
 
@@ -78,16 +89,19 @@ export function Sidebar() {
           <Settings size={18} className="group-hover:rotate-45 transition-transform" />
           <span className="text-sm font-bold font-headline">Settings</span>
         </button>
-        <Link to="/" className="w-full flex items-center gap-3 px-4 py-3 text-error/60 hover:bg-error/10 hover:text-error rounded-xl transition-all">
+        <button
+          onClick={signOutUser}
+          className="w-full flex items-center gap-3 px-4 py-3 text-error/60 hover:bg-error/10 hover:text-error rounded-xl transition-all"
+        >
           <LogOut size={18} />
           <span className="text-sm font-bold font-headline">Exit App</span>
-        </Link>
+        </button>
       </div>
     </aside>
   )
 }
 
-function SidebarLink({ label, path, icon, active }: any) {
+function SidebarLink({ label, path, icon, active, badge }: any) {
    return (
     <Link
       to={path}
@@ -100,6 +114,11 @@ function SidebarLink({ label, path, icon, active }: any) {
     >
       {icon}
       <span className="text-xs font-headline font-bold">{label}</span>
+      {badge ? (
+        <span className="ml-auto min-w-5 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-label font-black text-primary text-center">
+          {badge}
+        </span>
+      ) : null}
     </Link>
    )
 }

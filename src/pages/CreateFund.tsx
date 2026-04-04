@@ -14,6 +14,7 @@ import {
 import { cn } from '../utils/cn.ts'
 import { useFund } from '../context/FundContext'
 import { ApiService, type BlueprintResponse } from '../services/ApiService'
+import { useNavigate } from 'react-router-dom'
 
 const DEFAULT_BLUEPRINT: BlueprintResponse = {
   fundName: 'Custom Goal Fund',
@@ -28,14 +29,18 @@ const DEFAULT_BLUEPRINT: BlueprintResponse = {
 const DURATION_OPTIONS = [6, 12, 18, 24]
 
 export function CreateFund() {
-  const {} = useFund()
+  const { createLiveFund, state, hasActiveFund } = useFund()
+  const navigate = useNavigate()
   const [step, setStep] = useState(1)
   const [purpose, setPurpose] = useState('')
   const [groupSize, setGroupSize] = useState(10)
   const [durationMonths, setDurationMonths] = useState(12)
+  const [joinPassword, setJoinPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState<BlueprintResponse | null>(null)
+  const [creationNotice, setCreationNotice] = useState('')
 
   const confidenceWidth = toPercent(result?.confidence ?? DEFAULT_BLUEPRINT.confidence)
 
@@ -59,6 +64,52 @@ export function CreateFund() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleCreateFund = async () => {
+    if (joinPassword.trim().length < 4) {
+      setError('Set a join password with at least 4 characters.')
+      return
+    }
+
+    setCreating(true)
+    setError('')
+
+    let blueprint = result
+
+    if (!blueprint) {
+      try {
+        blueprint = await ApiService.synthesize({
+          intent: purpose.trim() || 'Shared savings goal',
+          groupSize,
+          durationMonths,
+        })
+        setResult(blueprint)
+        setStep(2)
+      } catch {
+        blueprint = DEFAULT_BLUEPRINT
+      }
+    }
+
+    const created = await createLiveFund({
+      fundName: blueprint.fundName,
+      purpose: purpose.trim() || 'Shared savings goal',
+      groupSize,
+      durationMonths,
+      monthlyInstallment: parseMoney(blueprint.monthlyInstallment),
+      joinPassword: joinPassword.trim(),
+    })
+
+    setCreating(false)
+
+    if (created.error || !created.fund) {
+      setError(created.error || 'Could not create the live fund.')
+      return
+    }
+
+    setStep(3)
+    setCreationNotice(`Live fund created. Share code ${created.fund.fundCode} and your room password so other users can join.`)
+    navigate('/dashboard')
   }
 
   const blueprint = result ?? DEFAULT_BLUEPRINT
@@ -134,6 +185,7 @@ export function CreateFund() {
               </div>
 
               {error ? <p className="text-sm text-red-300">{error}</p> : null}
+              {creationNotice ? <p className="text-sm text-primary">{creationNotice}</p> : null}
 
               <button
                 onClick={handleSynthesize}
@@ -143,6 +195,41 @@ export function CreateFund() {
                 {loading ? 'Synthesizing...' : 'Synthesize Fund Blueprint'}
                 <BrainCircuit size={20} className={cn('group-hover:rotate-12 transition-transform', loading && 'animate-spin')} />
               </button>
+
+              <div className="rounded-2xl border border-white/5 bg-surface-container-low p-5 space-y-4">
+                <div>
+                  <label className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant opacity-40">Join Password</label>
+                  <input
+                    type="password"
+                    value={joinPassword}
+                    onChange={(event) => setJoinPassword(event.target.value)}
+                    placeholder="Set a password other members must enter"
+                    className="mt-2 w-full rounded-xl border border-white/10 bg-surface px-4 py-3 text-on-surface focus:outline-none focus:border-primary/50"
+                  />
+                </div>
+
+                <button
+                  onClick={handleCreateFund}
+                  disabled={creating}
+                  className="w-full rounded-2xl border border-primary/30 bg-primary/10 px-4 py-4 text-sm font-headline font-bold text-primary disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {creating ? 'Creating Live Fund...' : 'Create Live Fund Room'}
+                </button>
+
+                {hasActiveFund ? (
+                  <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 text-sm text-on-surface">
+                    <p className="font-headline font-bold mb-1">Current Live Fund</p>
+                    <p>{state.fundName}</p>
+                    <p className="text-primary mt-1">Code: {state.fundCode}</p>
+                    <button
+                      onClick={() => navigate('/dashboard')}
+                      className="mt-3 text-xs font-label uppercase tracking-widest text-primary"
+                    >
+                      Open dashboard
+                    </button>
+                  </div>
+                ) : null}
+              </div>
             </div>
 
             <div className="relative">
@@ -206,6 +293,11 @@ export function CreateFund() {
       </main>
     </div>
   )
+}
+
+function parseMoney(value: string) {
+  const digits = value.replace(/[^\d]/g, '')
+  return Number(digits || '0')
 }
 
 function toPercent(value: string) {

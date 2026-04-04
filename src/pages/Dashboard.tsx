@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Sidebar } from '../components/Sidebar'
 import {
@@ -19,8 +20,43 @@ import { useFund } from '../context/FundContext'
 import { Link } from 'react-router-dom'
 
 export function Dashboard() {
-  const { state, contributionSummary } = useFund()
-  const { poolTotal, currentCycle, trustHealth, members, contributionHistory, auction } = state
+  const { state, contributionSummary, hasActiveFund, sendInviteEmail } = useFund()
+  const { poolTotal, currentCycle, trustHealth, members, contributionHistory, auction, fundName, fundCode, myWalletBalance, isCreator } = state
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteNotice, setInviteNotice] = useState('')
+  const [sendingInvite, setSendingInvite] = useState(false)
+
+  const handleSendInvite = async () => {
+    if (!inviteEmail.trim()) {
+      setInviteNotice('Enter an email address first.')
+      return
+    }
+
+    setSendingInvite(true)
+    const message = await sendInviteEmail(inviteEmail.trim())
+    setSendingInvite(false)
+    setInviteNotice(message)
+    if (!message.toLowerCase().includes('could not') && !message.toLowerCase().includes('please') && !message.toLowerCase().includes('not configured')) {
+      setInviteEmail('')
+    }
+  }
+
+  if (!hasActiveFund) {
+    return (
+      <div className="flex h-screen bg-surface">
+        <Sidebar />
+        <main className="flex-1 ml-64 p-8 flex items-center justify-center">
+          <div className="max-w-2xl rounded-[2rem] border border-white/5 bg-surface-container-low p-10 text-center">
+            <h1 className="text-4xl font-headline font-black text-on-surface mb-4">Start a Live Chit Fund</h1>
+            <p className="text-on-surface-variant opacity-60 mb-4">
+              Create a fund room, share the code and password, and other logged-in users will see the same live state.
+            </p>
+            <p className="text-primary font-headline font-bold">This dashboard becomes shared and real-time after create or join.</p>
+          </div>
+        </main>
+      </div>
+    )
+  }
 
   const leaderboard = [...members]
     .sort((a, b) => b.score - a.score)
@@ -93,14 +129,14 @@ export function Dashboard() {
           >
             <h1 className="text-3xl font-headline font-bold text-on-surface">Dashboard</h1>
             <p className="text-on-surface-variant font-medium opacity-60">
-              Live overview of collections, trust, and auction activity for Cycle {currentCycle}.
+              {fundName} live overview for Cycle {currentCycle}. Fund code: {fundCode}
             </p>
           </motion.div>
 
           <div className="flex items-center gap-4">
             <div className="flex flex-col items-end">
-              <span className="text-[10px] font-label tracking-widest uppercase text-tertiary">Fund Health</span>
-              <span className="text-xl font-headline font-black text-tertiary">{trustHealth}%</span>
+              <span className="text-[10px] font-label tracking-widest uppercase text-tertiary">My Demo Wallet</span>
+              <span className="text-xl font-headline font-black text-tertiary">{formatCurrency(myWalletBalance)}</span>
             </div>
             <div className="h-10 w-px bg-white/5 mx-2"></div>
             <div className="w-12 h-12 rounded-full overflow-hidden border border-white/10 ring-2 ring-primary/20">
@@ -139,6 +175,50 @@ export function Dashboard() {
             color="primary"
           />
         </div>
+
+        <section className="mb-10 rounded-2xl border border-primary/20 bg-primary/5 p-6">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-label uppercase tracking-[0.2em] text-primary mb-2">Live Fund Room</p>
+              <h2 className="text-2xl font-headline font-black text-on-surface">{fundName}</h2>
+              <p className="text-sm text-on-surface-variant opacity-70">
+                Share this code and your join password so another logged-in user can enter the same chit fund room.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-primary/20 bg-surface px-6 py-4 text-center">
+              <p className="text-[10px] font-label uppercase tracking-[0.2em] text-on-surface-variant opacity-50">Fund Code</p>
+              <p className="text-3xl font-headline font-black text-primary">{fundCode}</p>
+            </div>
+          </div>
+
+          {isCreator ? (
+            <div className="mt-6 rounded-2xl border border-white/5 bg-surface-container-low p-5">
+              <p className="text-[10px] font-label uppercase tracking-[0.2em] text-primary mb-2">Invite Through Twilio</p>
+              <p className="text-sm text-on-surface-variant opacity-70 mb-4">
+                Send the room code to a member by email through Twilio SendGrid.
+              </p>
+              <div className="flex flex-col md:flex-row gap-3">
+                <input
+                  type="email"
+                  value={inviteEmail}
+                  onChange={(event) => setInviteEmail(event.target.value)}
+                  placeholder="member@example.com"
+                  className="flex-1 rounded-2xl border border-white/10 bg-surface px-4 py-3 text-on-surface outline-none focus:border-primary/50"
+                />
+                <button
+                  onClick={() => { void handleSendInvite() }}
+                  disabled={sendingInvite}
+                  className="rounded-2xl bg-primary px-5 py-3 text-sm font-headline font-bold text-on-primary disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {sendingInvite ? 'Sending...' : 'Send Invite Email'}
+                </button>
+              </div>
+              {inviteNotice ? (
+                <p className="mt-3 text-sm text-on-surface-variant">{inviteNotice}</p>
+              ) : null}
+            </div>
+          ) : null}
+        </section>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-8">

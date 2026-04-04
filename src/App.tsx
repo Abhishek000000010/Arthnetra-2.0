@@ -10,25 +10,34 @@ import { SimulationMode } from './pages/SimulationMode'
 import { ContributionTracker } from './pages/ContributionTracker'
 import { WinnerAnnouncement } from './pages/WinnerAnnouncement'
 import { DefaultHandling } from './pages/DefaultHandling'
+import { Login } from './pages/Login'
+import { Signup } from './pages/Signup'
+import { JoinFund } from './pages/JoinFund'
+import { ProtectedRoute } from './components/ProtectedRoute'
+import { NotificationOverlay } from './components/NotificationOverlay'
 
 function App() {
   return (
     <Router>
+      <NotificationOverlay />
       <Routes>
         <Route path="/" element={<Landing />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/auction" element={<Auction />} />
-        <Route path="/ledger" element={<Ledger />} />
-        <Route path="/create" element={<CreateFund />} />
-        <Route path="/dna" element={<FundDNA />} />
-        <Route path="/profile" element={<MemberProfile />} />
-        <Route path="/simulate" element={<SimulationMode />} />
-        <Route path="/tracker" element={<ContributionTracker />} />
-        <Route path="/winner" element={<WinnerAnnouncement />} />
-        <Route path="/default" element={<DefaultHandling />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
+        <Route path="/join" element={<ProtectedRoute><JoinFund /></ProtectedRoute>} />
+        <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+        <Route path="/auction" element={<ProtectedRoute><Auction /></ProtectedRoute>} />
+        <Route path="/ledger" element={<ProtectedRoute><Ledger /></ProtectedRoute>} />
+        <Route path="/create" element={<ProtectedRoute><CreateFund /></ProtectedRoute>} />
+        <Route path="/dna" element={<ProtectedRoute><FundDNA /></ProtectedRoute>} />
+        <Route path="/profile" element={<ProtectedRoute><MemberProfile /></ProtectedRoute>} />
+        <Route path="/simulate" element={<ProtectedRoute><SimulationMode /></ProtectedRoute>} />
+        <Route path="/tracker" element={<ProtectedRoute><ContributionTracker /></ProtectedRoute>} />
+        <Route path="/winner" element={<ProtectedRoute><WinnerAnnouncement /></ProtectedRoute>} />
+        <Route path="/default" element={<ProtectedRoute><DefaultHandling /></ProtectedRoute>} />
         {/* Navigation aliases for sidebar consistency */}
-        <Route path="/fund" element={<Dashboard />} />
-        <Route path="/members" element={<ContributionTracker />} />
+        <Route path="/fund" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+        <Route path="/members" element={<ProtectedRoute><ContributionTracker /></ProtectedRoute>} />
       </Routes>
     </Router>
   )
