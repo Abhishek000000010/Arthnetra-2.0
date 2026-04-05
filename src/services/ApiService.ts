@@ -29,6 +29,15 @@ export type LiveMember = {
   lastPaidOn: string | null
   walletBalance: number
   isCurrentUser?: boolean
+  dnaClassification?: {
+    type: string
+    emoji: string
+    color: string
+    desc: string
+    badges: string[]
+  }
+  currentRiskLevel?: 'LOW' | 'MEDIUM' | 'HIGH'
+  lastPrediction?: any
 }
 
 export type LiveContributionRecord = {
@@ -93,11 +102,16 @@ export type LiveFundState = {
     detail: string
     type: string
     timestamp: string
+    block?: number
+    hash?: string
+    gasUsed?: number
   }[]
   myWalletBalance: number
   myMemberId: string | null
   isCreator: boolean
   creatorName: string
+  dna?: any
+  predictionStats?: any
 }
 
 export type PublicFundCard = {
@@ -127,6 +141,13 @@ export const ApiService = {
       body: JSON.stringify(payload),
     })
     return parseResponse<BlueprintResponse>(response)
+  },
+
+  async runAiPredictions(fundId: string): Promise<any> {
+    const response = await fetch(`${API_BASE}/predictions/run/${fundId}`, {
+      method: 'POST'
+    })
+    return parseResponse(response)
   },
 
   async registerGoogleUser(user: { id: string; name: string; email: string; picture?: string }) {
@@ -213,6 +234,20 @@ export const ApiService = {
 
   async topupWallet(email: string, amount: number) {
     const response = await fetch(`${API_BASE}/user/wallet/topup?email=${encodeURIComponent(email)}&amount=${amount}`, {
+      method: 'POST',
+    })
+    return parseResponse<{ message: string; new_balance: number }>(response)
+  },
+
+  async evolveDNA(fundId: string): Promise<any> {
+    const response = await fetch(`${API_BASE}/funds/${fundId}/dna/evolve`, {
+      method: 'POST',
+    })
+    return parseResponse<any>(response)
+  },
+
+  async withdrawWallet(email: string, amount: number) {
+    const response = await fetch(`${API_BASE}/user/wallet/withdraw?email=${encodeURIComponent(email)}&amount=${amount}`, {
       method: 'POST',
     })
     return parseResponse<{ message: string; new_balance: number }>(response)

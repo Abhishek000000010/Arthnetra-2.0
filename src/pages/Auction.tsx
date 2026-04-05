@@ -6,11 +6,13 @@ import {
   Info,
   History,
   TrendingDown,
+  TrendingUp,
   CheckCircle2,
   Users,
   TimerReset,
   Trophy,
   ShieldCheck,
+  Cpu,
 } from 'lucide-react'
 import { cn } from '../utils/cn.ts'
 import { useFund } from '../context/FundContext'
@@ -20,7 +22,7 @@ import { useAuth } from '../context/AuthContext'
 export function Auction() {
   const { state, placeBid, closeAuction, resetAuction, simulateBid, hasActiveFund } = useFund()
   const { user } = useAuth()
-  const { auction, currentCycle } = state
+  const { auction, currentCycle, poolTotal } = state
   const [bidAmount, setBidAmount] = useState('')
   const [isBidding, setIsBidding] = useState(false)
   const [message, setMessage] = useState('')
@@ -33,12 +35,12 @@ export function Auction() {
 
   const aiRecommendation = useMemo(() => {
     const suggestedBid = Math.max(auction.currentBid - auction.bidIncrement * 2, auction.bidIncrement)
-    const groupDividend = auction.poolAmount - suggestedBid
+    const groupDividend = poolTotal - suggestedBid
     return {
       suggestedBid,
       groupDividend,
     }
-  }, [auction.bidIncrement, auction.currentBid, auction.poolAmount])
+  }, [auction.bidIncrement, auction.currentBid, poolTotal])
 
   const handleOpenConfirm = () => {
     if (!isEligible) {
@@ -64,12 +66,20 @@ export function Auction() {
     setIsBidding(true)
   }
 
+  const [isBroadcasting, setIsBroadcasting] = useState(false)
+
   const handleConfirmBid = async () => {
     const parsed = Number(bidAmount)
     if (!Number.isFinite(parsed)) {
       setMessage('Enter a valid number for the bid.')
       return
     }
+
+    setIsBidding(false)
+    setIsBroadcasting(true)
+    
+    // Virtual Blockchain Propagation Delay
+    await new Promise(resolve => setTimeout(resolve, 3000))
 
     setSubmitting(true)
     try {
@@ -78,10 +88,10 @@ export function Auction() {
 
       if (outcome.ok) {
         setBidAmount('')
-        setIsBidding(false)
       }
     } finally {
       setSubmitting(false)
+      setIsBroadcasting(false)
     }
   }
 
@@ -92,6 +102,12 @@ export function Auction() {
     } else {
       setMessage('Auction closed.')
     }
+  }
+
+  const handleReset = async () => {
+    setMessage('')
+    setBidAmount('')
+    await resetAuction()
   }
 
   if (!hasActiveFund) {
@@ -122,7 +138,7 @@ export function Auction() {
   }
 
   return (
-    <div className="flex h-screen bg-surface">
+    <div className="flex h-screen bg-surface relative overflow-hidden">
       <Sidebar />
 
       <main className="flex-1 ml-64 p-8 overflow-y-auto">
@@ -145,8 +161,8 @@ export function Auction() {
 
           <div className="bg-surface-container-low px-6 py-4 rounded-2xl border border-white/5 flex items-center gap-6">
             <div className="text-right">
-              <p className="text-[10px] font-label tracking-widest uppercase text-on-surface-variant opacity-40">Pool Amount</p>
-              <p className="text-2xl font-headline font-black text-on-surface">{formatCurrency(auction.poolAmount)}</p>
+              <p className="text-[10px] font-label tracking-widest uppercase text-on-surface-variant opacity-40">Live Total Pool</p>
+              <p className="text-2xl font-headline font-black text-on-surface">{formatCurrency(poolTotal)}</p>
             </div>
             <div className="h-8 w-px bg-white/5 mx-2"></div>
             <div className="text-right">
@@ -168,11 +184,84 @@ export function Auction() {
           </div>
         </header>
 
+        <AnimatePresence>
+          {isBroadcasting && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#050505]/95 backdrop-blur-xl"
+            >
+              <div className="relative mb-8">
+                <motion.div 
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+                  className="w-32 h-32 rounded-full border-2 border-dashed border-primary/40 flex items-center justify-center"
+                />
+                <motion.div 
+                   animate={{ scale: [1, 1.2, 1] }}
+                   transition={{ duration: 1.5, repeat: Infinity }}
+                   className="absolute inset-0 flex items-center justify-center text-primary"
+                >
+                  <Cpu size={48} />
+                </motion.div>
+              </div>
+              <h2 className="text-2xl font-black font-headline uppercase tracking-tighter mb-2">Broadcasting to Mainnet</h2>
+              <div className="flex items-center gap-2 text-on-surface-variant opacity-60 font-mono text-sm">
+                <span className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse" />
+                <span>Propagating to 28 consensus nodes...</span>
+              </div>
+              
+              <div className="mt-8 flex gap-1 justify-center">
+                 {[1,2,3,4,5].map(i => (
+                   <motion.div 
+                     key={i}
+                     animate={{ opacity: [0.1, 1, 0.1] }}
+                     transition={{ duration: 1, delay: i * 0.2, repeat: Infinity }}
+                     className="w-8 h-1 rounded bg-primary"
+                   />
+                 ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {message ? (
           <div className="mb-8 rounded-2xl border border-primary/20 bg-primary/10 px-5 py-4 text-sm font-headline font-bold text-on-surface">
             {message}
           </div>
         ) : null}
+
+        {auction.isActive && (
+          <div className="mb-10 p-6 rounded-3xl border border-primary/20 bg-primary/5 flex flex-col md:flex-row items-center justify-between gap-6 overflow-hidden relative">
+            <div className="absolute top-0 left-0 w-32 h-32 bg-primary/20 blur-[60px] rounded-full -ml-16 -mt-16"></div>
+            <div className="flex items-center gap-4 z-10">
+              <div className="p-3 rounded-2xl bg-primary text-on-primary">
+                <TrendingUp size={24} />
+              </div>
+              <div>
+                <h3 className="text-xl font-headline font-black text-on-surface">Live Bidding Profit</h3>
+                <p className="text-xs text-on-surface-variant opacity-60">The difference between pool total and the winning bid is shared by all other members.</p>
+              </div>
+            </div>
+
+            <div className="flex gap-8 z-10 w-full md:w-auto overflow-x-auto pb-2 md:pb-0">
+               <div>
+                 <p className="text-[10px] font-label tracking-widest uppercase text-on-surface-variant opacity-40 mb-1">Total Group Profit</p>
+                 <p className="text-2xl font-headline font-black text-primary tabular-nums">
+                   {formatCurrency(Math.max(poolTotal - (auction.currentBid || 0), 0))}
+                 </p>
+               </div>
+               <div className="h-10 w-px bg-white/10 hidden md:block"></div>
+               <div>
+                 <p className="text-[10px] font-label tracking-widest uppercase text-on-surface-variant opacity-40 mb-1">Your Share (If Ends Now)</p>
+                 <p className="text-2xl font-headline font-black text-on-surface tabular-nums">
+                   {formatCurrency(Math.max(poolTotal - (auction.currentBid || 0), 0) / Math.max(state.members.length - 1, 1))}
+                 </p>
+               </div>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-8">
           <div className="space-y-8">
@@ -203,12 +292,11 @@ export function Auction() {
                         <span className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant font-headline font-bold text-xl opacity-40">Rs</span>
                         <input
                           type="number"
-                          min={auction.bidIncrement}
-                          max={auction.poolAmount}
-                          step={auction.bidIncrement}
+                          min="1"
+                          max={auction.poolAmount - 1}
                           value={bidAmount}
                           onChange={(event) => setBidAmount(event.target.value)}
-                          placeholder={`Lower than ${auction.currentBid}`}
+                          placeholder="Bid any amount lower than the current best"
                           className="w-full bg-surface-container-lowest border border-white/10 rounded-xl px-14 py-5 text-2xl font-headline font-bold text-on-surface focus:outline-none focus:border-primary/50 transition-all placeholder:text-on-surface-variant/20"
                         />
                       </div>
@@ -237,7 +325,6 @@ export function Auction() {
                       <div className="space-y-2 text-sm">
                         <p>Suggested bid: <span className="text-primary font-bold">{formatCurrency(aiRecommendation.suggestedBid)}</span></p>
                         <p>Estimated group dividend: <span className="text-primary font-bold">{formatCurrency(aiRecommendation.groupDividend)}</span></p>
-                        <p>Bid increment rule: <span className="text-primary font-bold">{formatCurrency(auction.bidIncrement)}</span></p>
                       </div>
                     </div>
                   </div>
@@ -366,7 +453,7 @@ export function Auction() {
                   Auction is closed. Use the button below to instantly reset the cycle for the next judge.
                 </p>
                 <button
-                  onClick={() => { void resetAuction() }}
+                  onClick={() => { void handleReset() }}
                   className="w-full rounded-xl bg-error/10 border border-error/30 text-error py-3 font-headline font-bold hover:bg-error/20 transition-all"
                 >
                   Reset for Next Judge

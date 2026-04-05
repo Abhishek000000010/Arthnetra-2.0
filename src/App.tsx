@@ -15,11 +15,13 @@ import { Signup } from './pages/Signup'
 import { JoinFund } from './pages/JoinFund'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { NotificationOverlay } from './components/NotificationOverlay'
+import { FinancialCoach } from './components/coach/FinancialCoach'
 
 function App() {
   return (
     <Router>
       <NotificationOverlay />
+      <FinancialCoach />
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />

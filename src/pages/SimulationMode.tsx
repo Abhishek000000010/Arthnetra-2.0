@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { motion } from 'framer-motion'
 import * as THREE from 'three'
 import { Sidebar } from '../components/Sidebar'
 import {
@@ -12,6 +13,7 @@ import {
   ShieldAlert,
   Wallet,
   Gavel,
+  Sparkles,
 } from 'lucide-react'
 import { cn } from '../utils/cn.ts'
 import { useFund } from '../context/FundContext'
@@ -41,6 +43,16 @@ export function SimulationMode() {
   const [memberTurbulence, setMemberTurbulence] = useState(45)
   const [marketInflation, setMarketInflation] = useState(12)
   const [systemFriction, setSystemFriction] = useState(82)
+  const [showCoach, setShowCoach] = useState(false)
+
+  useEffect(() => {
+    if (scenario === 'shock') {
+      const timer = setTimeout(() => setShowCoach(true), 2000)
+      return () => clearTimeout(timer)
+    } else {
+      setShowCoach(false)
+    }
+  }, [scenario])
   const simulation = useMemo(
     () =>
       runProjection({
@@ -237,6 +249,27 @@ export function SimulationMode() {
           </div>
         </div>
       </main>
+
+      {/* Artificial Coach Bubble on Default Shock */}
+      {showCoach && (
+        <motion.div 
+          initial={{ opacity: 0, y: 50, scale: 0.9 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          className="fixed bottom-10 right-10 z-50 max-w-sm rounded-3xl border border-primary/20 bg-surface-container-high p-6 shadow-2xl shadow-primary/20"
+        >
+          <div className="flex items-start gap-4">
+            <div className="mt-1 rounded-full bg-primary/20 p-2 text-primary">
+              <Sparkles size={20} />
+            </div>
+            <div>
+              <h4 className="mb-2 text-sm font-headline font-bold text-on-surface">ChitMind AI Coach</h4>
+              <p className="text-sm leading-relaxed text-on-surface-variant">
+                I noticed Arjun defaulted on his payment. Don't worry, the Smart Contract automatically tapped into the Reserve Pool to cover his share. Your payout is safe and will arrive on schedule. 🛡️
+              </p>
+            </div>
+          </div>
+        </motion.div>
+      )}
     </div>
   )
 }

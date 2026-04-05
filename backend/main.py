@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from fastapi import HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -181,7 +181,6 @@ def member_score(member: dict) -> int:
         penalty = 80
     return int(min(1000, max(300, average * 8 + 180 - penalty)))
 
-
 def build_member(name: str, email: str, picture: str | None, code: str, index: int) -> dict:
     due_date = datetime.now(timezone.utc).date().isoformat()
     member = {
@@ -195,50 +194,317 @@ def build_member(name: str, email: str, picture: str | None, code: str, index: i
         "total_contributed": 0,
         "due_date": due_date,
         "last_paid_on": None,
+        "dna_classification": {
+            "type": "Newbie",
+            "emoji": "🌱",
+            "color": "#00BCD4",
+            "desc": "Just started their journey.",
+            "badges": ["Early Stage"]
+        }
     }
     member["score"] = member_score(member)
     return member
 
 
-def add_activity(fund, title, detail, type, amount=0, user="System"):
-    activity_id = str(uuid.uuid4())
-    timestamp = utc_now_iso()
-    
-    # Get the hash of the last activity to link it (The Block Header)
-    prev_hash = "0x0000000000000000000000000000000000000000000000000000000000000000"
-    if fund.get("activity") and len(fund["activity"]) > 0:
-        prev_hash = fund["activity"][0].get("hash", prev_hash)
 
-    # Create the data for hashing (The Block Body)
-    block_data = {
-        "id": activity_id,
+# --- FUND DNA CORE ENGINE (HACKATHON PRIDE) ---
+
+DEFAULT_DNA_RULES = {
+    "version": 1,
+    "min_bid_percent": 0.70,        # 70% of pool minimum
+    "min_trust_to_bid": 60,         # trust score needed to bid
+    "max_strikes_allowed": 3,       # strikes before excluded
+    "auction_duration_hours": 48,   # how long auction stays open
+    "due_day": 5,                   # 5th of month
+    "grace_period_days": 3,         # 3 days grace
+    "penalty_type": "flat",         # flat or progressive
+    "penalty_value": 500,           # Rs 500 flat penalty
+    "penalty_percent": 0.02,        # 2% (used if progressive)
+    "reserve_percent": 0.05,        # 5% of pool to reserve
+}
+
+def get_default_dna():
+    return {
+        "version": 1,
+        "maturity_score": 15,
+        "last_evolution": utc_now_iso(),
+        "rules": DEFAULT_DNA_RULES,
+        "risk_analysis": {
+            "overall_score": 100,
+            "level": "LOW",
+            "message": "Initial group formation complete. System in observation mode."
+        },
+        "history": [],
+        "observations": ["Genesis block created", "Risk parameters initialized"],
+        "insights": ["Collecting initial behavior patterns for liquidity prediction."]
+    }
+
+def calculate_cycle_metrics(fund: dict):
+    members = fund.get("members", [])
+    auction = fund.get("auction", {})
+    total = len(members)
+    if total == 0: return {}
+
+    on_time = len([m for m in members if m.get("status") == "paid"])
+    overdue = len([m for m in members if m.get("status") == "overdue"])
+    defaults = len([m for m in members if m.get("status") == "defaulted"])
+    
+    pool_total = auction.get("pool_amount", 0)
+    winning_bid = auction.get("last_result", {}).get("winningBid", pool_total)
+    
+    # metrics calculation
+    return {
+        "on_time_rate": on_time / total,
+        "late_rate": overdue / total,
+        "default_rate": defaults / total,
+        "bid_pressure": winning_bid / pool_total if pool_total > 0 else 1.0,
+        "avg_trust": sum(m.get("score", 0) for m in members) / (total * 10) # 0-100 scale
+    }
+
+def classify_member(member: dict, fund_cycle: int):
+    # Behavioral logic
+    history = member.get("repayment_history", [])
+    total_cycles = len(history)
+    on_time_count = len([h for h in history if h >= 100])
+    late_count = len([h for h in history if 0 < h < 100])
+    default_count = len([h for h in history if h == 0])
+    
+    trust = member.get("score", 0) / 10 # 0-100
+    
+    if default_count == 0 and late_count <= 1 and trust >= 85:
+        return {
+            "type": "Champion",
+            "emoji": "🏆",
+            "color": "#00D68F",
+            "desc": "Consistently reliable. The backbone of the fund.",
+            "badges": ["On-Time Specialist", "Fund Anchor"]
+        }
+    elif default_count == 0 and late_count <= 3 and trust >= 70:
+        return {
+            "type": "Reliable",
+            "emoji": "✅",
+            "color": "#6C63FF",
+            "desc": "Dependable member with minor delays.",
+            "badges": ["Active Contributor"]
+        }
+    elif default_count == 0 and late_count > 3:
+        return {
+            "type": "Irregular",
+            "emoji": "⚠️",
+            "color": "#FFB547",
+            "desc": "Pays eventually but struggles with deadlines.",
+            "badges": ["Late Settler"]
+        }
+    elif default_count > 0:
+        return {
+            "type": "Defaulter",
+            "emoji": "❌",
+            "color": "#FF0000",
+            "desc": "Chronic issues detected. Restricted access.",
+            "badges": ["High Risk"]
+        }
+    else:
+        return {
+            "type": "Newbie",
+            "emoji": "🌱",
+            "color": "#00BCD4",
+            "desc": "Just started their journey.",
+            "badges": ["Early Stage"]
+        }
+
+def analyze_group_risk(metrics: dict):
+    # Risk Dimension Scoring
+    p_health = round(metrics["on_time_rate"] * 100)
+    d_risk = round((1 - metrics["default_rate"]) * 100)
+    t_health = round(metrics["avg_trust"])
+    a_health = round(metrics["bid_pressure"] * 100)
+    
+    # Weighted Score
+    overall = (p_health * 0.35) + (d_risk * 0.35) + (t_health * 0.20) + (a_health * 0.10)
+    
+    level = "LOW"
+    msg = "Fund is healthy. Members are reliable."
+    if overall < 50:
+        level = "CRITICAL"
+        msg = "Immediate intervention required. High default risk."
+    elif overall < 65:
+        level = "HIGH"
+        msg = "Significant risk detected. Rules must be tightened."
+    elif overall < 80:
+        level = "MEDIUM"
+        msg = "Status: Warning. Monitor payment patterns closely."
+        
+    return {
+        "overall_score": round(overall),
+        "level": level,
+        "message": msg,
+        "dimensions": {
+            "payment": p_health,
+            "default": d_risk,
+            "trust": t_health,
+            "auction": a_health
+        }
+    }
+
+def detect_dna_problems(metrics: dict):
+    problems = []
+    if metrics["default_rate"] > 0.15:
+        problems.append({"code": "HIGH_DEFAULT", "msg": f"{metrics['default_rate']*100:.1f}% members defaulted"})
+    if metrics["late_rate"] > 0.25:
+        problems.append({"code": "HIGH_LATE", "msg": "Payment delays reaching critical threshold"})
+    if metrics["bid_pressure"] <= 0.72:
+        problems.append({"code": "DESPERATE_BIDDING", "msg": "Winning bid hit the minimum floor"})
+    if metrics["avg_trust"] < 65:
+        problems.append({"code": "LOW_TRUST", "msg": "Average group trust is declining"})
+    return problems
+
+def generate_dna_evolution(problems: dict, rules: dict):
+    changes = []
+    new_rules = rules.copy()
+    
+    for p in problems:
+        if p["code"] == "HIGH_DEFAULT":
+            old = new_rules["min_trust_to_bid"]
+            new_rules["min_trust_to_bid"] = min(90, old + 10)
+            changes.append({
+                "title": "Stricter Bidding",
+                "reason": "Default risk detected. Raising trust threshold to protect pool.",
+                "before": f"Score > {old}",
+                "after": f"Score > {new_rules['min_trust_to_bid']}"
+            })
+            
+        if p["code"] == "HIGH_LATE":
+            old = new_rules["due_day"]
+            new_rules["due_day"] = min(15, old + 2)
+            changes.append({
+                "title": "Payment Flexibility",
+                "reason": "Detected systematic delays. Aligning due date with current patterns.",
+                "before": f"{old}th of month",
+                "after": f"{new_rules['due_day']}th of month"
+            })
+            
+        if p["code"] == "DESPERATE_BIDDING":
+            old = new_rules["min_bid_percent"]
+            new_rules["min_bid_percent"] = min(0.90, old + 0.05)
+            changes.append({
+                "title": "Bid Floor Raised",
+                "reason": "Desperation bidding detected. Raising floor to reduce exploitation.",
+                "before": f"{old*100:.0f}%",
+                "after": f"{new_rules['min_bid_percent']*100:.0f}%"
+            })
+
+    return new_rules, changes
+
+def validate_prediction_accuracy(fund: dict):
+    if "prediction_stats" not in fund:
+        fund["prediction_stats"] = {
+            "total_evaluated": 0,
+            "correct_predictions": 0,
+            "accuracy_history": []
+        }
+        
+    evaluated_this_cycle = 0
+    correct_this_cycle = 0
+    
+    for m in fund.get("members", []):
+        if "lastPrediction" in m:
+            pred = m["lastPrediction"].get("riskLevel", "LOW")
+            status = m.get("status", "pending")
+            
+            evaluated_this_cycle += 1
+            
+            if pred == "HIGH" and status == "overdue":
+                correct_this_cycle += 1
+            elif pred in ["LOW", "MEDIUM"] and status in ["paid", "grace"]:
+                correct_this_cycle += 1
+                
+    if evaluated_this_cycle > 0:
+        fund["prediction_stats"]["total_evaluated"] += evaluated_this_cycle
+        fund["prediction_stats"]["correct_predictions"] += correct_this_cycle
+        cycle_acc = round((correct_this_cycle / evaluated_this_cycle) * 100, 1)
+        fund["prediction_stats"]["accuracy_history"].append({
+            "cycle": fund.get("current_cycle", 1),
+            "evaluated": evaluated_this_cycle,
+            "correct": correct_this_cycle,
+            "accuracy": cycle_acc
+        })
+
+async def evolve_dna_internal(fund: dict):
+    # 0. Validate Predictions
+    validate_prediction_accuracy(fund)
+
+    # 1. Metrics
+    metrics = calculate_cycle_metrics(fund)
+    if not metrics: return fund
+    
+    # 2. Risk Analysis
+    risk = analyze_group_risk(metrics)
+    
+    # 3. Classify Members
+    for m in fund["members"]:
+        m["dna_classification"] = classify_member(m, fund["current_cycle"])
+        
+    # 4. Detect & Evolve
+    problems = detect_dna_problems(metrics)
+    current_rules = fund.get("dna", {}).get("rules") or DEFAULT_DNA_RULES
+    new_rules, changes = generate_dna_evolution(problems, current_rules)
+    
+    # 5. Build DNA Payload
+    dna = fund.get("dna", get_default_dna())
+    dna["version"] += 1
+    dna["maturity_score"] = min(100, dna["maturity_score"] + (10 if not problems else 5))
+    dna["last_evolution"] = utc_now_iso()
+    dna["rules"] = new_rules
+    dna["risk_analysis"] = risk
+    dna["observations"] = [p["msg"] for p in problems] if problems else ["Perfect cycle synchronization observed."]
+    dna["insights"] = [c["reason"] for c in changes] if changes else ["System stability verified. Rules unchanged."]
+    
+    if changes:
+        dna["history"].append({
+            "version": dna["version"],
+            "timestamp": dna["last_evolution"],
+            "changes": changes
+        })
+    
+    fund["dna"] = dna
+    add_activity(
+        fund, 
+        "DNA Sequence Mutated", 
+        f"AI evolved Fund DNA to v{dna['version']} based on Cycle {fund['current_cycle']} semantics.",
+        "system"
+    )
+    return fund
+
+
+
+
+# VIRTUAL BLOCKCHAIN GLOBAL STATE
+VIRTUAL_BLOCK_HEIGHT = 482931
+
+def generate_tx_hash():
+    return f"0x{secrets.token_hex(32)}"
+
+def add_activity(fund: dict, title: str, detail: str, type: str = "info", user: str = "System"):
+    global VIRTUAL_BLOCK_HEIGHT
+    VIRTUAL_BLOCK_HEIGHT += random.randint(3, 12)
+    
+    activity_entry = {
+        "id": secrets.token_hex(12),
         "title": title,
         "detail": detail,
         "type": type,
-        "amount": amount,
         "user": user,
-        "timestamp": timestamp,
-        "prevHash": prev_hash
-    }
-    
-    # Generate SHA-256 Hash
-    block_string = json.dumps(block_data, sort_keys=True).encode()
-    current_hash = "0x" + hashlib.sha256(block_string).hexdigest()
-
-    # Create the activity record
-    activity_entry = {
-        **block_data,
-        "hash": current_hash,
+        "timestamp": utc_now_iso(),
+        "hash": generate_tx_hash(),
+        "block": VIRTUAL_BLOCK_HEIGHT,
+        "gas_used": random.randint(21000, 48000),
         "unread": True
     }
 
     if "activity" not in fund:
         fund["activity"] = []
     
-    # Insert at beginning (LIFO for UI)
     fund["activity"].insert(0, activity_entry)
-    
-    # Limit activity log
     if len(fund["activity"]) > 100:
         fund["activity"] = fund["activity"][:100]
 
@@ -301,6 +567,15 @@ async def serialize_member(member: dict, current_email: str | None) -> dict:
         "lastPaidOn": member.get("last_paid_on"),
         "walletBalance": member_wallet,
         "isCurrentUser": member["email"] == current_email,
+        "dnaClassification": member.get("dna_classification", {
+            "type": "Newbie",
+            "emoji": "🌱",
+            "color": "#00BCD4",
+            "desc": "Just started their journey.",
+            "badges": ["Early Stage"]
+        }),
+        "currentRiskLevel": member.get("currentRiskLevel"),
+        "lastPrediction": member.get("lastPrediction")
     }
 
 
@@ -352,6 +627,8 @@ async def serialize_fund(fund: dict, current_email: str | None) -> dict:
         "myMemberId": me["id"] if me else None,
         "isCreator": fund["creator_email"] == current_email,
         "creatorName": fund["creator_name"],
+        "dna": fund.get("dna", get_default_dna()),
+        "predictionStats": fund.get("prediction_stats"),
     }
 
 
@@ -404,17 +681,18 @@ def create_fund_document(payload: dict) -> dict:
         "activity": [],
         "auction": {
             "is_active": True,
-            "current_bid": payload["monthly_installment"],
+            "current_bid": payload["group_size"] * payload["monthly_installment"],
             "highest_bidder": None,
             "highest_bidder_email": None,
             "time_left": 1800,
             "history": [],
-            "pool_amount": payload["monthly_installment"],
-            "bid_increment": max(500, payload["monthly_installment"] // 20),
+            "pool_amount": payload["group_size"] * payload["monthly_installment"],
+            "bid_increment": 1,
             "eligible_members": [payload["creator_email"].lower()],
             "previous_winners": [],
             "last_result": None,
         },
+        "dna": get_default_dna(),
         "created_at": utc_now_iso(),
         "updated_at": utc_now_iso(),
     }
@@ -425,6 +703,37 @@ def create_fund_document(payload: dict) -> dict:
         "system",
     )
     return recompute_fund(fund)
+
+
+@app.post("/api/funds/{fund_id}/dna/evolve")
+async def evolve_fund_dna(fund_id: str):
+    fund = await db.funds.find_one({"_id": fund_id})
+    if not fund:
+        raise HTTPException(status_code=404, detail="Fund not found.")
+    
+    await evolve_dna_internal(fund)
+    await db.funds.replace_one({"_id": fund["_id"]}, fund)
+    
+    return {
+        "message": "ArthaNetra DNA Evolution Complete",
+        "fund": await serialize_fund(fund, None)
+    }
+
+async def find_or_create_user(email: str, name: str = "Demo User"):
+    normalized = email.strip().lower()
+    user = await db.users.find_one({"email": normalized})
+    if not user:
+        user = {
+            "name": name,
+            "email": normalized,
+            "picture": f"https://api.dicebear.com/7.x/avataaars/svg?seed={normalized}",
+            "wallet_balance": 10000.0,
+            "created_at": utc_now_iso(),
+        }
+        await db.users.insert_one(user)
+    return user
+
+
 
 
 def send_invite_email_via_smtp(payload: dict) -> None:
@@ -955,7 +1264,30 @@ async def topup_wallet(email: str, amount: float = 5000.0):
         raise HTTPException(status_code=404, detail=f"User {normalized} not found")
     
     await db.users.update_one({"email": normalized}, {"$inc": {"wallet_balance": amount}})
-    return {"message": f"Added Rs {amount} to your wallet.", "new_balance": user.get("wallet_balance", 0) + amount}
+    return {"message": f"Added Rs {amount} to your wallet.", "new_balance": (user.get("wallet_balance", 0) or 0) + amount}
+
+
+@app.post("/api/user/wallet/withdraw")
+async def withdraw_wallet(email: str, amount: float):
+    normalized = email.strip().lower()
+    user = await db.users.find_one({"email": normalized})
+    if not user:
+        raise HTTPException(status_code=404, detail=f"User {normalized} not found")
+    
+    current_balance = user.get("wallet_balance", 0) or 0
+    if current_balance < amount:
+        raise HTTPException(status_code=400, detail="Insufficient funds in your wallet.")
+    
+    await db.users.update_one({"email": normalized}, {"$inc": {"wallet_balance": -amount}})
+    
+    # Generate a dummy transaction hash for realism
+    tx_hash = "0x" + secrets.token_hex(32)
+    
+    return {
+        "message": f"Withdrawal of Rs {amount} processed successfully.",
+        "new_balance": current_balance - amount,
+        "transactionHash": tx_hash
+    }
 
 
 @app.post("/api/funds/{fund_id}/contributions/bulk")
@@ -1047,7 +1379,7 @@ async def update_live_member_status(fund_id: str, payload: MemberStatusUpdateReq
     )
     recompute_fund(fund)
     await db.funds.replace_one({"_id": fund["_id"]}, fund)
-    return {"message": f"{member['name']} updated.", "fund": serialize_fund(fund, member["email"])}
+    return {"message": f"{member['name']} updated.", "fund": await serialize_fund(fund, member["email"])}
 
 
 @app.post("/api/funds/{fund_id}/auction/bid")
@@ -1081,11 +1413,7 @@ async def place_live_bid(fund_id: str, payload: LiveAuctionBidRequest):
             status_code=400,
             detail=f"Bid must be lower than {format_inr(auction['current_bid'])}.",
         )
-    if auction["current_bid"] - payload.amount < auction["bid_increment"]:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Each bid must improve by at least {format_inr(auction['bid_increment'])}.",
-        )
+    # Bid increment check removed to allow flexible bidding as per user request
 
     auction["history"] = [
         {
@@ -1138,9 +1466,23 @@ async def close_live_auction(fund_id: str):
     group_dividend = max(auction["pool_amount"] - winning_bid, 0)
     bonus_per_member = round(group_dividend / max(len(fund["members"]), 1))
 
+    # Important: Distribute Payouts and Dividends to Global User Wallets
     for member in fund["members"]:
-        member["wallet_balance"] += bonus_per_member
-    winner["wallet_balance"] += payout
+        member_email = member["email"].strip().lower()
+        member_bonus = bonus_per_member
+        
+        # Accumulate won payout for the winner
+        if member_email == winner["email"].strip().lower():
+            member_bonus += payout
+            
+        # Update fund's local member statistics
+        member["wallet_balance"] = member.get("wallet_balance", 0) + member_bonus
+        
+        # Update the actual user global wallet
+        await db.users.update_one(
+            {"email": member_email},
+            {"$inc": {"wallet_balance": member_bonus}}
+        )
 
     fund["pool_total"] = max(fund["pool_total"] - auction["pool_amount"], 0)
     auction["is_active"] = False
@@ -1166,13 +1508,6 @@ async def close_live_auction(fund_id: str):
         *auction.get("previous_winners", []),
     ][:12]
 
-    # Distribute the pool
-    # Logic: Add Payout to Winner's Global Wallet
-    await db.users.update_one(
-        {"email": winner["email"]},
-        {"$inc": {"wallet_balance": payout}}
-    )
-
     add_activity(
         fund,
         "Winner Paid",
@@ -1183,6 +1518,10 @@ async def close_live_auction(fund_id: str):
     )
 
     fund["updated_at"] = utc_now_iso()
+    
+    # AUTO-EVOLVE DNA on Auction Close
+    await evolve_dna_internal(fund)
+    
     await db.funds.replace_one({"_id": fund_id}, fund)
 
     return {
@@ -1198,24 +1537,32 @@ async def demo_reset_auction(fund_id: str):
     if not fund:
         raise HTTPException(status_code=404, detail="Fund not found.")
     
-    auction = fund["auction"]
-    auction["is_active"] = True
-    auction["history"] = []
-    auction["time_left"] = 1800
-    auction["last_result"] = None
+    # HARD RESET for demonstration purposes
+    fund["auction"]["is_active"] = True
+    fund["auction"]["history"] = []
+    fund["auction"]["time_left"] = 1800
+    fund["auction"]["last_result"] = None
+    fund["auction"]["previous_winners"] = []
+    fund["auction"]["eligible_members"] = [m["email"] for m in fund["members"]]
+    fund["auction"]["current_bid"] = len(fund["members"]) * fund["monthly_installment"]
+    fund["auction"]["highest_bidder"] = None
+    fund["auction"]["highest_bidder_email"] = None
     
-    # Optional: Reset current bid to pool amount
-    auction["current_bid"] = len(fund["members"]) * fund["monthly_installment"]
-    auction["highest_bidder"] = None
-    auction["highest_bidder_email"] = None
-
+    # Also reset member statuses to 'paid' for a clean month
+    for member in fund["members"]:
+        member["status"] = "paid"
+    
     fund["updated_at"] = utc_now_iso()
+    fund["current_cycle"] = 1
+    fund["pool_total"] = len(fund["members"]) * fund["monthly_installment"]
+    
     add_activity(
         fund,
-        "System Reset",
-        "The auction has been reset for another demonstration.",
+        "System Reset (Judge Ready)",
+        "The auction has been fully reset to Cycle 1 for a fresh demonstration.",
         "system"
     )
+    
     recompute_fund(fund)
     await db.funds.replace_one({"_id": fund["_id"]}, fund)
     return {"message": "Auction reset for demo.", "fund": await serialize_fund(fund, None)}
@@ -1276,8 +1623,277 @@ async def place_bid(bid: AuctionBid):
     await db.bids.insert_one(bid.dict())
     return {"status": "Bid recorded on chain (mock)"}
 
+# -------------------------------------------------------------------
+#  AI DEFAULT PREDICTION ENGINE (FEATURE 13)
+# -------------------------------------------------------------------
+import google.generativeai as google_genai
+
+def build_gemini_prompt(member_context: dict) -> str:
+    prompt = f"""You are ArthaNetra's AI risk engine. You analyse chit fund member behaviour and predict default risk for the upcoming payment cycle.
+
+Respond ONLY in this exact JSON format with no markdown, no explanation outside the JSON. Return valid JSON only:
+{{
+  "riskLevel": "LOW" | "MEDIUM" | "HIGH",
+  "confidence": <number 0-100>,
+  "reasoning": "<2-3 sentence plain English explanation of why this risk level was assigned. Be specific about which data points drove the decision. Sound like a smart financial advisor.>",
+  "recommendedAction": "<one specific action: SEND_EARLY_NUDGE | SEND_STANDARD_NUDGE | MONITOR_ONLY | ESCALATE_TO_ADMIN | NO_ACTION_NEEDED>",
+  "earlyNudgeDays": <number: how many days before due date to send nudge. 0 if no nudge.>,
+  "keyRiskFactors": ["factor1", "factor2"],
+  "positiveFactors": ["factor1"]
+}}
+
+Member data for analysis:
+Name: {member_context['name']}
+Current cycle: {member_context['cycleNumber']}
+Status: {member_context['status']}
+Late payment instances: {member_context['latePaymentCount']}
+Missed payments: {member_context['missedCount']}
+Trust score: {member_context['trustScore']}
+
+Analyse this data and predict default risk for the upcoming payment. Be decisive.
+"""
+    return prompt
+
+
+@app.post("/api/predictions/run/{fund_id}")
+async def run_group_predictions(fund_id: str):
+    fund = await db.funds.find_one({"_id": fund_id})
+    if not fund:
+        raise HTTPException(status_code=404, detail="Fund not found")
+    
+    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("VITE_GEMINI_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="GEMINI_API_KEY missing in .env")
+    
+    google_genai.configure(api_key=api_key)
+    model = google_genai.GenerativeModel("gemini-2.0-flash")
+    
+    updated = False
+    
+    for member in fund.get("members", []):
+        try:
+            late_count = 1 if member.get("status") == "overdue" else 0
+            ctx = {
+                "name": member["name"],
+                "cycleNumber": fund["current_cycle"],
+                "status": member.get("status", "pending"),
+                "latePaymentCount": late_count,
+                "missedCount": 0,
+                "trustScore": member.get("score", 75)
+            }
+            
+            # Simple heuristic override for perfect payers
+            if late_count == 0 and member.get("score", 0) > 85:
+                pred = {
+                    "riskLevel": "LOW",
+                    "confidence": 95,
+                    "reasoning": "Member has a high trust score and perfect payment record. Autopay likelihood is high.",
+                    "recommendedAction": "NO_ACTION_NEEDED",
+                    "earlyNudgeDays": 0,
+                    "keyRiskFactors": [],
+                    "positiveFactors": ["High Trust Score", "Perfect History"]
+                }
+            else:
+                prompt = build_gemini_prompt(ctx)
+                response = model.generate_content(prompt)
+                
+                text_response = response.text.strip()
+                if text_response.startswith("```json"):
+                    text_response = text_response.replace("```json", "", 1)
+                elif text_response.startswith("```"):
+                    text_response = text_response.replace("```", "", 1)
+                if text_response.endswith("```"):
+                    text_response = text_response[:-3]
+                
+                pred = json.loads(text_response.strip())
+                
+            member["lastPrediction"] = pred
+            member["currentRiskLevel"] = pred.get("riskLevel", "LOW")
+            updated = True
+        except Exception as e:
+            print(f"Error predicting for {member['name']}: {e}")
+            pass
+            
+    if updated:
+        await db.funds.replace_one({"_id": fund_id}, fund)
+        
+    return {"message": "Predictions run complete", "fund": await serialize_fund(fund, None)}
+
+@app.get("/api/predictions/{fund_id}")
+async def get_fund_predictions(fund_id: str):
+    fund = await db.funds.find_one({"_id": fund_id})
+    if not fund:
+        raise HTTPException(status_code=404, detail="Fund not found")
+        
+    results = []
+    for member in fund.get("members", []):
+        if "lastPrediction" in member:
+            results.append({
+                "userId": member["id"],
+                "name": member["name"],
+                "email": member["email"],
+                "riskLevel": member.get("currentRiskLevel", "LOW"),
+                "prediction": member["lastPrediction"]
+            })
+            
+    return results
+
+# -------------------------------------------------------------------
+#  AI FINANCIAL HEALTH COACH (FEATURE 14)
+# -------------------------------------------------------------------
+from fastapi.responses import StreamingResponse
+
+class CoachMessagePayload(BaseModel):
+    groupId: str
+    message: str
+
+def build_coach_prompt(member: dict, fund: dict) -> str:
+    score_details = member.get("score_details", {})
+    timeliness = score_details.get("timeliness", 0)
+    consistency = score_details.get("payment_consistency", 0)
+    missed_count = member.get("missed_count", 0)
+    
+    history = member.get("repayment_history", [])[-6:]
+    history_str = ", ".join([f"C{h['cycle']}: {h.get('status', 'paid')}" for h in history])
+    
+    fund_size = fund.get("pool_total", 0)
+    monthly = fund.get("monthly_installment", 0)
+    current_cycle = fund.get("current_cycle", 1)
+    duration = fund.get("duration_months", 1)
+    members_count = len(fund.get("members", []))
+    
+    auction = fund.get("auction", {})
+    winners = auction.get("previous_winners", [])
+    won = "Won" if member.get("email") in winners else "Not won yet"
+    
+    return f"""You are ChitMind's AI Financial Coach. You are advising {member['name']} in their chit fund.
+Be warm, specific, and concise. Max 3 sentences per response unless asked for detail.
+Never be generic. Always reference their actual data when answering. Do not make up numbers.
+If asked something outside chit fund finance, gently redirect back to their fund goals.
+
+MEMBER PROFILE:
+Name: {member['name']}
+Trust Score: {member.get('score', 0)}/100
+Payment Consistency: {consistency}
+Timeliness: {timeliness}
+Defaults: {missed_count}
+Autopay: Disabled
+Strikes: 0
+
+PAYMENT HISTORY:
+{history_str}
+
+FUND CONTEXT:
+Fund size: ₹{fund_size}
+Monthly contribution: ₹{monthly}
+Current cycle: {current_cycle} of {duration}
+Members: {members_count}
+{member['name']}'s auction status: {won}
+"""
+
+@app.get("/api/coach/session/{group_id}")
+async def get_coach_session(group_id: str, email: str = Query(...)):
+    target_email = email.strip().lower()
+    session = await db.coach_sessions.find_one({"groupId": group_id, "email": target_email})
+    
+    if not session:
+        messages = []
+        if target_email == "zara@example.com":
+            messages = [
+                {"role": "user", "content": "Am I going to lose my trust score?", "timestamp": utc_now_iso()},
+                {"role": "assistant", "content": "Your score is at 48 — it's the lowest in the group but not unsalvageable. Two on-time payments in a row will bring you above 55 and back into auction eligibility.", "timestamp": utc_now_iso()},
+                {"role": "user", "content": "Should I enable autopay?", "timestamp": utc_now_iso()},
+                {"role": "assistant", "content": "Yes — absolutely. Given your payment pattern, Autopay is the single best thing you can do right now. It gives you +5 trust immediately and removes all default risk going forward.", "timestamp": utc_now_iso()}
+            ]
+            await db.coach_sessions.insert_one({
+                "groupId": group_id,
+                "email": target_email,
+                "messages": messages,
+                "createdAt": utc_now_iso(),
+                "updatedAt": utc_now_iso()
+            })
+        return {"messages": messages}
+    return {"messages": session.get("messages", [])}
+
+@app.delete("/api/coach/session/{group_id}")
+async def clear_coach_session(group_id: str, email: str = Query(...)):
+    target_email = email.strip().lower()
+    await db.coach_sessions.delete_one({"groupId": group_id, "email": target_email})
+    return {"status": "cleared"}
+
+@app.post("/api/coach/message")
+async def send_coach_message(payload: CoachMessagePayload, email: str = Query(...)):
+    target_email = email.strip().lower()
+    
+    fund = await db.funds.find_one({"_id": payload.groupId})
+    if not fund:
+        raise HTTPException(status_code=404, detail="Fund not found")
+        
+    member = find_member_by_email(fund, target_email)
+    if not member:
+        raise HTTPException(status_code=404, detail="Member not found")
+        
+    session = await db.coach_sessions.find_one({"groupId": payload.groupId, "email": target_email})
+    if not session:
+        session = {
+            "groupId": payload.groupId,
+            "email": target_email,
+            "messages": [],
+            "createdAt": utc_now_iso(),
+            "updatedAt": utc_now_iso()
+        }
+        await db.coach_sessions.insert_one(session)
+        
+    sys_prompt = build_coach_prompt(member, fund)
+    
+    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("VITE_GEMINI_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="GEMINI_API_KEY missing")
+        
+    google_genai.configure(api_key=api_key)
+    model = google_genai.GenerativeModel("gemini-2.0-flash", system_instruction=sys_prompt)
+    
+    history = []
+    for msg in session["messages"][-10:]:
+        role = "user" if msg["role"] == "user" else "model"
+        history.append({"role": role, "parts": [{"text": msg["content"]}]})
+        
+    chat = model.start_chat(history=history)
+    
+    import asyncio
+    
+    async def stream_generator():
+        full_response = ""
+        try:
+            # send_message with stream=True is synchronous, run in executor
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                None, lambda: chat.send_message(payload.message, stream=True)
+            )
+            for chunk in response:
+                if chunk.text:
+                    full_response += chunk.text
+                    yield chunk.text
+        except Exception as e:
+            print("Gemini Coach Error:", e)
+            yield "Coach is taking a break. Try again shortly."
+            return
+
+        # Save the messages after streaming completes
+        try:
+            new_messages = session["messages"] + [
+                {"role": "user", "content": payload.message, "timestamp": utc_now_iso()},
+                {"role": "assistant", "content": full_response, "timestamp": utc_now_iso()}
+            ]
+            await db.coach_sessions.update_one(
+                {"groupId": payload.groupId, "email": target_email},
+                {"$set": {"messages": new_messages[-12:], "updatedAt": utc_now_iso()}}
+            )
+        except Exception as e:
+            print("Coach DB save error:", e)
+            
+    return StreamingResponse(stream_generator(), media_type="text/plain")
 
 if __name__ == "__main__":
     import uvicorn
-
     uvicorn.run(app, host="0.0.0.0", port=8001)

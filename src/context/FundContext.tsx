@@ -62,7 +62,10 @@ interface FundContextType {
   enforceProtocol: () => void
   resetAuction: () => Promise<void>
   simulateBid: () => Promise<void>
+  refreshBalance: () => Promise<void>
   topupWallet: (amount?: number) => Promise<string>
+  withdrawFunds: (amount: number) => Promise<string>
+  evolveDNA: () => Promise<string>
   contributionSummary: ContributionSummary
 }
 
@@ -172,16 +175,25 @@ export function FundProvider({ children }: { children: React.ReactNode }) {
 
     let targetFundId = activeFundId
     if (!targetFundId) {
-      const fundList = await ApiService.listFundsForUser(user.email)
-      targetFundId = fundList.funds[0]?.fundId || null
+      try {
+        const fundList = await ApiService.listFundsForUser(user.email)
+        targetFundId = fundList.funds[0]?.fundId || null
+      } catch {
+        targetFundId = null
+      }
+      
       if (!targetFundId) {
         setActiveFund(null)
         return
       }
     }
 
-    const response = await ApiService.getFund(targetFundId, user.email)
-    setActiveFund(response.fund)
+    try {
+      const response = await ApiService.getFund(targetFundId, user.email)
+      setActiveFund(response.fund)
+    } catch {
+      setActiveFund(null)
+    }
   }
 
   useEffect(() => {
@@ -423,6 +435,29 @@ export function FundProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  const withdrawFunds = async (amount: number) => {
+    if (!user) return 'Please login first.'
+    try {
+      const response = await ApiService.withdrawWallet(user.email, amount)
+      await refreshBalance()
+      if (activeFundId) await refreshFund()
+      return response.message
+    } catch (error) {
+      return error instanceof Error ? error.message : 'Could not process withdrawal.'
+    }
+  }
+
+  const evolveDNA = async () => {
+    if (!activeFundId) return 'No active fund.'
+    try {
+      const response = await ApiService.evolveDNA(activeFundId)
+      await refreshFund()
+      return response.message
+    } catch {
+      return 'Evolution failed.'
+    }
+  }
+
   return (
     <FundContext.Provider
       value={{
@@ -448,8 +483,11 @@ export function FundProvider({ children }: { children: React.ReactNode }) {
         synthesizeBlueprint,
         enforceProtocol,
         resetAuction,
+        withdrawFunds,
         simulateBid,
+        refreshBalance,
         topupWallet,
+        evolveDNA,
         contributionSummary,
       }}
     >
@@ -460,6 +498,8 @@ export function FundProvider({ children }: { children: React.ReactNode }) {
 
 export function useFund() {
   const context = useContext(FundContext)
-  if (!context) throw new Error('useFund must be used within a FundProvider')
+  if (!context) {
+    throw new Error('useFund must be used within a FundProvider')
+  }
   return context
 }
